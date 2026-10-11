@@ -57,6 +57,9 @@ internal class ClusterMapPresentation(
         val size = sizeOf(display)
         val adaptive = DiLink51ClusterLayout.supported()
         val plan = if (adaptive) DiLink51ClusterLayout.plan(size.x, size.y, theme) else null
+        // Leapmotor C11 exposes no measurable DiLink layers, so its square window is derived from
+        // the physical panel size instead. It is only ever used when DiLink planning failed.
+        val leap = if (plan == null) LeapmotorClusterLayout.plan(size.x, size.y) else null
         // The adaptive DiLink 5.1 layout follows the cluster's own contrast; elsewhere the cluster follows DiPlay's theme.
         val dark = if (plan != null) DiLink51ClusterLayout.dark(context, theme) else context.resolveAppNightNow()
         val backdrop = if (dark) Color.rgb(15, 22, 30) else Color.rgb(207, 218, 229)
@@ -68,10 +71,15 @@ internal class ClusterMapPresentation(
             window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
-        val videoParams = if (plan == null) FrameLayout.LayoutParams(-1, -1) else
-            FrameLayout.LayoutParams(plan.width, plan.height, Gravity.TOP or Gravity.LEFT).apply {
+        val videoParams = when {
+            leap != null -> FrameLayout.LayoutParams(leap.width, leap.height, Gravity.TOP or Gravity.LEFT).apply {
+                leftMargin = leap.left; topMargin = leap.top
+            }
+            plan == null -> FrameLayout.LayoutParams(-1, -1)
+            else -> FrameLayout.LayoutParams(plan.width, plan.height, Gravity.TOP or Gravity.LEFT).apply {
                 leftMargin = plan.left; topMargin = plan.top
             }
+        }
         if (plan != null) {
             val textureView = TextureView(context)
             fun transform() {

@@ -1,6 +1,7 @@
 package com.shilapi.xcertplay.airplay
 
 import android.view.KeyEvent
+import java.util.Locale
 
 /**
  * Hardware media keys → CarPlay media HID presses (indices into [AirPlayHid]'s media report).
@@ -81,5 +82,34 @@ object CarPlayMediaButton {
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> PREVIOUS
             else -> null
         }
+    }
+
+    /**
+     * Leapmotor's head unit publishes its wheel keys as text instead of Android key events: the
+     * instrument cluster reads CAN and republishes the press. The spellings below are the ones its
+     * firmware variants were observed sending; a missing entry degrades to "unmapped" rather than
+     * guessing, because a wrong media press is worse than none.
+     */
+    fun forLeapmotorAction(raw: String?): Int? = when (raw?.trim()?.lowercase(Locale.ROOT)) {
+        "play" -> PLAY
+        "pause", "stop" -> PAUSE
+        "playpause", "pauseplay", "toggleplay", "toggleplaypause", "play_pause" -> PLAY_PAUSE
+        "next", "nextone", "nexttrack" -> NEXT
+        "prev", "preone", "previous", "previoustrack" -> PREVIOUS
+        else -> null
+    }
+
+    /**
+     * Whether [raw] is a wheel media command rather than one of the head unit's own radio or
+     * assistant commands that share the same channels.
+     *
+     * Deliberately narrower than [forLeapmotorAction]: a bare `play`/`pause`/`stop` also arrives
+     * from radio and voice paths, and acting on those would hijack whichever source owns audio.
+     */
+    fun isWheelAction(raw: String?): Boolean = when (raw?.trim()?.lowercase(Locale.ROOT)) {
+        "toggleplaypause", "play_pause", "nextone", "nexttrack", "pauseplay",
+        "prev", "next", "previoustrack", "toggleplay", "preone", "previous", "playpause",
+        -> true
+        else -> false
     }
 }

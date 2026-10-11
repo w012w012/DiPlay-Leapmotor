@@ -5120,6 +5120,9 @@ class CarPlayHostActivity : ComponentActivity() {
         resetSidePanel() // a new session starts without the side panel
         updateClusterMapShown()
         CarPlayMediaKeys.attach(this, next)
+        // Leapmotor: the head unit publishes wheel keys and gear as broadcasts, not key events.
+        LeapmotorMediaKeys.attach(this, next)
+        LeapmotorGearMonitor.attach(this, next)
         if (airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
         val display = CarPlaySessionDisplay(
             airPlayConfig.main.widthPixels, airPlayConfig.main.heightPixels,
@@ -5526,6 +5529,8 @@ class CarPlayHostActivity : ComponentActivity() {
         val oldController = controller
         val oldSink = sink
         CarPlayMediaKeys.detach(oldController)
+        LeapmotorMediaKeys.detach(oldController)
+        LeapmotorGearMonitor.detach(oldController)
         CarPlayBackgroundSession.clear(oldController, keepOwner = true)
         controller = null
         oldSink?.let(retiringSinks::add)
@@ -5722,6 +5727,8 @@ class CarPlayHostActivity : ComponentActivity() {
         val oldController = controller
         val oldSink = sink
         CarPlayMediaKeys.detach(oldController)
+        LeapmotorMediaKeys.detach(oldController)
+        LeapmotorGearMonitor.detach(oldController)
         CarPlayBackgroundSession.clear(oldController)
         controller = null
         oldSink?.let(retiringSinks::add)
