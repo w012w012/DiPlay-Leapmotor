@@ -80,6 +80,7 @@ object AirPlayPersistence {
     private const val KEY_LOW_LATENCY_DECODER = "low_latency_decoder"
     private const val KEY_FPS_COUNTER = "fps_counter"
     private const val KEY_CLUSTER_MAP = "cluster_map_enabled"
+    private const val KEY_CLUSTER_DISPLAY_ID = "cluster_display_id"
     private const val KEY_ADB_CLUSTER_ACTIVITY = "adb_cluster_activity_enabled"
     private const val KEY_CENTER_MAP_OVERLAY = "center_map_overlay"
     private const val KEY_CENTER_MAP_AUTO_HIDE = "center_map_auto_hide"
@@ -784,6 +785,25 @@ object AirPlayPersistence {
     fun saveClusterMapEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_CLUSTER_MAP, enabled).apply()
     }
+
+    /** The display the driver picked for the instrument cluster; -1 follows the car's own report. */
+    fun loadClusterDisplayId(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getInt(KEY_CLUSTER_DISPLAY_ID, -1)
+
+    fun saveClusterDisplayId(context: Context, displayId: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_CLUSTER_DISPLAY_ID, displayId).apply()
+    }
+
+    /** Whether the driver ever moved the cluster marker sliders away from the built-in default. */
+    fun clusterMarkerCustomized(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        return prefs.contains(KEY_CLUSTER_MARKER_X_PERCENT) || prefs.contains(KEY_CLUSTER_MARKER_Y_PERCENT)
+    }
+
+    /** Whether the driver ever changed the cluster map size away from the built-in default. */
+    fun clusterMapScaleCustomized(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).contains(KEY_CLUSTER_MAP_SCALE)
 
     /** The dashboard map as a card on the centre screen while DiPlay is in the background. */
     fun loadCenterMapOverlay(context: Context): Boolean =

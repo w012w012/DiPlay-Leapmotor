@@ -152,19 +152,19 @@ internal object LeapmotorGearMonitor {
     private fun updateReverse(controller: CarPlayController?, reverse: Boolean) {
         if (reverse) {
             if (pausedByReverse) return
-            var sent = false
-            if (controller != null) {
-                sent = controller.sendMediaButton(CarPlayMediaButton.PAUSE)
+            if (controller == null) {
+                // Without a session there is nothing to pause, and setting the flag here would make
+                // the next gear change send a stray resume.
+                report("reverse: no CarPlay session; nothing to pause")
+                return
             }
+            val sent = controller.sendMediaButton(CarPlayMediaButton.PAUSE)
             pausedByReverse = true
             report("reverse: pause CarPlay sent=$sent")
         } else {
             if (!pausedByReverse) return
             pausedByReverse = false
-            var sent = false
-            if (controller != null) {
-                sent = controller.sendMediaButton(CarPlayMediaButton.PLAY)
-            }
+            val sent = controller?.sendMediaButton(CarPlayMediaButton.PLAY) ?: false
             report("reverse ended: resume CarPlay sent=$sent")
         }
     }

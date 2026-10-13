@@ -1374,6 +1374,26 @@ class CarPlayHostActivity : ComponentActivity() {
                         markerYPercent = AirPlayPersistence.loadClusterMarkerYPercent(this),
                     ).also { MapMirrors.streamAspect = it.widthPixels.toDouble() / it.heightPixels }
                 }
+                if (LeapmotorClusterLayout.isC11()) {
+                    // The square stream the C11's renderer expects. The marker sliders move the
+                    // measured safe area when this firmware's uncovered area differs.
+                    val markerX = AirPlayPersistence.loadClusterMarkerXPercent(this)
+                    val markerY = if (AirPlayPersistence.clusterMarkerCustomized(this)) {
+                        AirPlayPersistence.loadClusterMarkerYPercent(this)
+                    } else LeapmotorClusterLayout.DEFAULT_MARKER_Y_PERCENT
+                    val scale = if (AirPlayPersistence.clusterMapScaleCustomized(this)) {
+                        AirPlayPersistence.loadClusterMapScalePercent(this)
+                    } else LeapmotorClusterLayout.DEFAULT_SCALE_PERCENT
+                    return LeapmotorClusterLayout.streamConfig(
+                        AirPlayPersistence.loadClusterContent(this),
+                        scalePercent = scale,
+                        markerXPercent = markerX,
+                        markerYPercent = markerY,
+                    ).also {
+                        MapMirrors.streamAspect = it.widthPixels.toDouble() / it.heightPixels
+                        appendLog("Cluster map: Leapmotor square ${it.widthPixels}x${it.heightPixels} scale=$scale marker=$markerX/$markerY safeArea=${it.safeArea}")
+                    }
+                }
                 val requestedScale = AirPlayPersistence.loadClusterMapScalePercent(this)
                 val smallWindow = smallWindowActive()
                 requestedSmallWindowForStream = smallWindow
@@ -5121,6 +5141,9 @@ class CarPlayHostActivity : ComponentActivity() {
         updateClusterMapShown()
         CarPlayMediaKeys.attach(this, next)
         // Leapmotor: the head unit publishes wheel keys and gear as broadcasts, not key events.
+        // Their findings go into the diagnostic report so the car can be checked without ADB.
+        LeapmotorMediaKeys.onDiagnostic = { line -> appendLog(line) }
+        LeapmotorGearMonitor.onDiagnostic = { line -> appendLog(line) }
         LeapmotorMediaKeys.attach(this, next)
         LeapmotorGearMonitor.attach(this, next)
         if (airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
@@ -5729,6 +5752,8 @@ class CarPlayHostActivity : ComponentActivity() {
         CarPlayMediaKeys.detach(oldController)
         LeapmotorMediaKeys.detach(oldController)
         LeapmotorGearMonitor.detach(oldController)
+        LeapmotorMediaKeys.onDiagnostic = null
+        LeapmotorGearMonitor.onDiagnostic = null
         CarPlayBackgroundSession.clear(oldController)
         controller = null
         oldSink?.let(retiringSinks::add)

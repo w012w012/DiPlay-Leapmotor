@@ -80,10 +80,21 @@ internal object LeapmotorMediaProtocol {
         "com.leapmotor.action.VOICE.CTRL",
     )
 
-    /** Everything registered at runtime. */
-    val ACTIONS: List<String> = CHANNEL_A + STOCK_HOUSEKEEPING + C11_CHANNEL
+    /**
+     * The C11's steering-wheel bridge. The wheel key arrives as an int extra `action`; the mapping
+     * (1 = previous, 4 = next, 7 = play/pause) is the one the 0.2.15-245 C11 build listens for.
+     * It is the only wheel path confirmed on a real C11, so it is registered unconditionally.
+     */
+    val STEERWHEEL_CHANNELS = listOf(
+        "com.leapmotor.steerwheelcontrol",
+        "com.leapmotor.steerwheelcontrol.media",
+        "com.leapmotor.steerwheelcontrol.phone",
+    )
 
-    /** Registered actions plus the int-extra channels, for diagnostics. */
+    /** The text channels registered at runtime. */
+    val ACTIONS: List<String> = CHANNEL_A + STOCK_HOUSEKEEPING + C11_CHANNEL + STEERWHEEL_CHANNELS
+
+    /** Every channel registered at runtime, including the int-extra ones. */
     val ALL_ACTIONS: List<String> = ACTIONS + EXTRA_CHANNELS
 
     private val MEDIA_KEY_EXTRA = arrayOf("ICU_MediaKey", "mediaKey")
@@ -96,6 +107,18 @@ internal object LeapmotorMediaProtocol {
 
     fun isExtraChannel(action: String?): Boolean = action != null && EXTRA_CHANNELS.contains(action)
     fun isC11Channel(action: String?): Boolean = action != null && C11_CHANNEL.contains(action)
+    fun isSteerWheelChannel(action: String?): Boolean = action != null && STEERWHEEL_CHANNELS.contains(action)
+
+    /** The wheel bridge numbers the keys in the int extra `action`. */
+    fun steerWheelAction(intent: Intent?): String? {
+        if (intent == null) return null
+        return when (intExtra(intent, arrayOf(ACTION_EXTRA))) {
+            1 -> "preOne"
+            4 -> "nextOne"
+            7 -> "playpause"
+            else -> null
+        }
+    }
 
     /**
      * `receiver` is a length-prefixed UTF-8 JSON body rather than a plain string: the first two bytes
@@ -204,7 +227,7 @@ internal object LeapmotorMediaKeys {
         this.controller = controller
         if (receiver != null) return
         val filter = IntentFilter().apply {
-            LeapmotorMediaProtocol.ACTIONS.forEach(::addAction)
+            LeapmotorMediaProtocol.ALL_ACTIONS.forEach(::addAction)
         }
         val created = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -224,7 +247,7 @@ internal object LeapmotorMediaKeys {
             )
         }.isSuccess
         receiver = created.takeIf { registered }
-        report("media keys listening on ${LeapmotorMediaProtocol.ACTIONS.size} actions registered=$registered")
+        report("media keys listening on ${LeapmotorMediaProtocol.ALL_ACTIONS.size} actions registered=$registered")
     }
 
     @Synchronized
@@ -262,6 +285,11 @@ internal object LeapmotorMediaKeys {
                 val mapped = LeapmotorMediaProtocol.c11ChannelAction(intent)
                 if (mapped != null) dispatch(mapped, action)
                 else report("media key c11-channel unmatched action=$action extras=[${LeapmotorMediaProtocol.extraChannelDetail(intent)}]")
+            }
+            LeapmotorMediaProtocol.isSteerWheelChannel(action) -> {
+                val mapped = LeapmotorMediaProtocol.steerWheelAction(intent)
+                if (mapped != null) dispatch(mapped, action)
+                else report("media key steerwheel unmatched action=$action extras=[${LeapmotorMediaProtocol.extraChannelDetail(intent)}]")
             }
             else -> {
                 val fromPayload = LeapmotorMediaProtocol.actionFromPayload(

@@ -2102,6 +2102,25 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     }
                 }
                 if (clusterDisplay != null || adbCluster) {
+                    if (LeapmotorClusterLayout.isC11()) {
+                        // Which display carries the meter differs between C11 firmware builds, so the
+                        // automatic choice can be overridden here without rebuilding the app.
+                        val displays = ClusterMapPresentation.presentationDisplays(this)
+                        if (displays.isNotEmpty()) {
+                            val saved = AirPlayPersistence.loadClusterDisplayId(this)
+                            val labels = listOf(getString(R.string.leapmotor_cluster_display_auto)) +
+                                displays.map { display ->
+                                    val size = ClusterMapPresentation.sizeOf(display)
+                                    "${display.displayId}: ${display.name} ${size.x}x${size.y}"
+                                }
+                            val current = displays.indexOfFirst { it.displayId == saved } + 1
+                            choice(card, getString(R.string.leapmotor_cluster_display), labels, current) { index ->
+                                AirPlayPersistence.saveClusterDisplayId(this,
+                                    if (index == 0) -1 else displays[index - 1].displayId)
+                            }
+                            card.addView(label(getString(R.string.leapmotor_cluster_display_description), 14, MUTED))
+                        }
+                    }
                     if (DiLink51ClusterLayout.supported() && !adbCluster) {
                         val automatic = DiLink51ClusterLayout.automatic(this)
                         toggle(card, getString(R.string.follow_instrument_theme_and_map_card),

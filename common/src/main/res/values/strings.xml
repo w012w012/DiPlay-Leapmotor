@@ -166,6 +166,9 @@
     <string name="choose_your_iphone">Choose your iPhone</string>
     <string name="close">Close</string>
     <string name="cluster_map_size">Dashboard map size</string>
+    <string name="leapmotor_cluster_display">Instrument cluster display</string>
+    <string name="leapmotor_cluster_display_auto">Automatic</string>
+    <string name="leapmotor_cluster_display_description">DiPlay uses the display the car reports as its instrument cluster. Pick one here if the map appears on the wrong screen.</string>
     <string name="connect">Connect</string>
     <string name="connect_phone">Connect phone</string>
     <string name="connect_when_diplay_opens">Connect when DiPlay opens</string>

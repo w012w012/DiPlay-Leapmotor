@@ -65,13 +65,32 @@ internal class ClusterMapPresentation(
         val backdrop = if (dark) Color.rgb(15, 22, 30) else Color.rgb(207, 218, 229)
         val placeholder = if (dark) Color.BLACK else Color.rgb(233, 238, 246)
         val root = FrameLayout(context).apply {
-            setBackgroundColor(if (plan == null) placeholder else if (plan.fullMap) backdrop else Color.TRANSPARENT)
+            setBackgroundColor(
+                when {
+                    leap != null -> Color.TRANSPARENT
+                    plan == null -> placeholder
+                    plan.fullMap -> backdrop
+                    else -> Color.TRANSPARENT
+                }
+            )
         }
-        if (plan != null) {
+        if (plan != null || leap != null) {
             window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
             window?.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
         }
+        // The C11 cluster is a real screen that also renders the car's own gauges: claim only the
+        // measured square instead of the whole panel, and let touches outside it reach the car. If
+        // the firmware refuses the resized window the video keeps the panel coordinates, so the map
+        // still lands where the renderer measured it.
+        val leapWindow = leap != null && run {
+            window?.setGravity(Gravity.END or Gravity.TOP)
+            window?.setLayout(leap.width, leap.height)
+            window?.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL)
+            val attributes = window?.attributes
+            attributes != null && attributes.width == leap.width && attributes.height == leap.height
+        }
         val videoParams = when {
+            leapWindow -> FrameLayout.LayoutParams(-1, -1)
             leap != null -> FrameLayout.LayoutParams(leap.width, leap.height, Gravity.TOP or Gravity.LEFT).apply {
                 leftMargin = leap.left; topMargin = leap.top
             }
@@ -80,6 +99,7 @@ internal class ClusterMapPresentation(
                 leftMargin = plan.left; topMargin = plan.top
             }
         }
+        if (leap != null) Log.i(TAG, "leapmotor viewport=$leap window=$leapWindow")
         if (plan != null) {
             val textureView = TextureView(context)
             fun transform() {
@@ -135,7 +155,7 @@ internal class ClusterMapPresentation(
         val waitingColor = if (dark) Color.WHITE else Color.DKGRAY
         val density = context.resources.displayMetrics.density
         waitingLabel = FrameLayout(context).apply {
-            if (plan == null) setBackgroundColor(placeholder)
+            if (plan == null && leap == null) setBackgroundColor(placeholder)
             addView(ProgressBar(context).apply {
                 isIndeterminate = true
                 indeterminateTintList = ColorStateList.valueOf(waitingColor)
@@ -210,6 +230,11 @@ internal class ClusterMapPresentation(
 
         /** Keep the 5/5.1 selection order, then try the measured DiLink 4 projection display. */
         fun findDisplay(context: Context, theme: DiLink51ClusterLayout.Theme = DiLink51ClusterLayout.theme(context)): Display? {
+            // The C11 exposes a plain 1920x720 HDMI screen instead of a named BYD layer, and which
+            // of its displays carries the meter differs between firmware builds.
+            if (LeapmotorClusterLayout.isC11()) {
+                return LeapmotorClusterLayout.findDisplay(context, AirPlayPersistence.loadClusterDisplayId(context))
+            }
             val displays = context.getSystemService(DisplayManager::class.java)
                 ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION) ?: return null
             val name = DiLink51ClusterLayout.displayName(
@@ -238,6 +263,11 @@ internal class ClusterMapPresentation(
                     "${it.displayId}:${it.name} ${size.x}x${size.y} flags=${it.flags} valid=${it.isValid}"
                 }.orEmpty()
 
+        /** The displays the driver may pick from when the automatic meter choice is wrong. */
+        fun presentationDisplays(context: Context): List<Display> =
+            context.getSystemService(DisplayManager::class.java)
+                ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION)?.toList().orEmpty()
+
         fun diagnosticReport(context: Context): String = buildString {
             appendLine("clusterEnabled=${AirPlayPersistence.loadClusterMapEnabled(context)}")
             appendLine("navigationReceiverAvailable=${com.shilapi.xcertplay.hud.BydOutputSettings.navigationAvailable(context)}")
@@ -245,6 +275,10 @@ internal class ClusterMapPresentation(
             val presentations = context.getSystemService(DisplayManager::class.java)
                 ?.getDisplays(DisplayManager.DISPLAY_CATEGORY_PRESENTATION).orEmpty()
             appendLine("presentationDisplayIds=${presentations.joinToString { it.displayId.toString() }}")
+            if (LeapmotorClusterLayout.isC11()) {
+                appendLine("leapmotorMeterDisplayId=${LeapmotorClusterLayout.meterDisplayId() ?: "none"}")
+                appendLine("leapmotorClusterDisplayChoice=${AirPlayPersistence.loadClusterDisplayId(context)}")
+            }
             val selected = findDisplay(context)
             append("selectedCluster=${selected?.let { "${it.displayId}:${it.name}" } ?: "none"}")
         }

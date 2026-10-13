@@ -164,6 +164,9 @@
     <string name="choose_your_iphone">iPhoneを選んでください</string>
     <string name="close">閉じる</string>
     <string name="cluster_map_size">メーター内地図のサイズ</string>
+    <string name="leapmotor_cluster_display">メーターディスプレイ</string>
+    <string name="leapmotor_cluster_display_auto">自動</string>
+    <string name="leapmotor_cluster_display_description">DiPlay は車両がメーターディスプレイとして報告する画面を使用します。地図が別の画面に表示される場合は、ここで選択してください。</string>
     <string name="connect">接続</string>
     <string name="connect_phone">iPhoneに接続</string>
     <string name="connect_when_diplay_opens">DiPlay起動時に接続</string>

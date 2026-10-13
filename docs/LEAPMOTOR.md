@@ -204,3 +204,43 @@ adb logcat -s DiPlay-Gear
 2. 38 个 action 里你的固件用哪个
 3. 有没有"一次按键换两首"（重复投递）
 4. HUD 转向指引：依赖上游 BYD SOME/IP（`com.ts.car.someip.*`），零跑上大概率绑定失败 → **应视为不可用**
+
+---
+
+## 7. C11 实车修正（基于 2023 款 C11 8155 的诊断报告与 0.2.15-245 版 APK）
+
+上游 v0.2.19 + 本分支补丁在 C11 上仍有四处不成立，已按证据修正。所有数值都可被设置项覆盖，
+不依赖任何单一版本的"正确答案"。
+
+### 7.1 方控：补 `steerwheelcontrol` 通道族
+
+诊断报告显示：按键时车机确实在广播（蓝牙音乐同时有反应），但原补丁的 31 个 action 一个都没命中。
+0.2.15-245 版 APK 注册的是 `com.leapmotor.steerwheelcontrol[.media|.phone]`，
+键码走 int extra `action`：**1 = 上一曲 / 4 = 下一曲 / 7 = 播放暂停**。
+
+- `LeapmotorMediaProtocol.STEERWHEEL_CHANNELS` 三个通道已加入注册
+- `attach()` 现在注册 `ALL_ACTIONS`（含 `ICU2MMICtrl`、`customkey.music.pauseplay` 两个 int-extra 通道）
+- 解析不出来的载荷会带完整 extras 写进诊断报告，便于按实车数据继续修正
+
+### 7.2 投仪表：选屏 + 方形流
+
+诊断报告：`allDisplays=0:内置屏幕 1920x1080, 1:HDMI 屏幕 1920x720, 2:HDMI 屏幕 1920x720`，
+两块 HDMI 屏都在 presentation 类别（flags=11）。选屏顺序：
+
+1. 设置里的手动选择（**仪表屏**，`cluster_display_id`）
+2. 固件属性 `persist.sys.lp.meterDisplayId`（0.2.15-245 版就是这么找的）
+3. 兜底：最后一块 1920×720 的 presentation 屏
+
+流参数：720×720 @ 30fps，safe area 由 marker 滑块驱动（默认 50/65，对应
+`top=255, bottom=39, left=255, right=255`，与 0.2.15-245 版一致）。
+窗口只占方形区域（gravity=END|TOP，透明背景），不动车机自己的仪表渲染；
+若固件拒绝缩放窗口，视频回退到面板坐标（left=1200, top=0）。
+
+### 7.3 诊断接入
+
+`LeapmotorMediaKeys.onDiagnostic` / `LeapmotorGearMonitor.onDiagnostic` 已接到应用日志：
+方控命中、挡位变化、未识别载荷都会出现在"保存诊断报告"的文本里，**不需要 ADB**。
+
+### 7.4 挡位边缘修正
+
+无 CarPlay 会话时进入 R 档不再置位 `pausedByReverse`，避免之后误发一次 PLAY。
