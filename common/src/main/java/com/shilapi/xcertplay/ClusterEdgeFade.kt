@@ -11,6 +11,39 @@ import android.graphics.Shader
 import android.widget.FrameLayout
 
 /**
+ * One edge's alpha ramp, measured from the panel edge inward.
+ *
+ * The map has to be *gone* at the edge — that edge is the seam being blended — and fully back at
+ * [toX]/[toY]. Running it the other way round (opaque at the edge, clear inside) leaves the hard seam
+ * untouched and deletes a band out of the middle of the map instead, which is what the first build of
+ * this fade did.
+ */
+internal data class EdgeFadeRamp(
+    val fromX: Float,
+    val fromY: Float,
+    val toX: Float,
+    val toY: Float,
+    val edgeAlpha: Int = 0,
+    val innerAlpha: Int = 255,
+)
+
+/** The left band: transparent at x=0, fully visible again at 27 % (by default) of the width. */
+internal fun leftEdgeFadeRamp(width: Float, percent: Int): EdgeFadeRamp? {
+    if (percent <= 0 || width <= 0f) return null
+    val stop = width * percent.coerceIn(0, 100) / 100f
+    if (stop <= 0f) return null
+    return EdgeFadeRamp(fromX = 0f, fromY = 0f, toX = stop, toY = 0f)
+}
+
+/** The top band: transparent at y=0, fully visible again at 10 % (by default) of the height. */
+internal fun topEdgeFadeRamp(height: Float, percent: Int): EdgeFadeRamp? {
+    if (percent <= 0 || height <= 0f) return null
+    val stop = height * percent.coerceIn(0, 100) / 100f
+    if (stop <= 0f) return null
+    return EdgeFadeRamp(fromX = 0f, fromY = 0f, toX = 0f, toY = stop)
+}
+
+/**
  * The C11 projection's left and top edges, faded out by taking alpha away from the video itself.
  *
  * This is the difference from [ClusterEdgeMaskView]: nothing is painted over the map. The frame keeps
@@ -30,13 +63,13 @@ internal class ClusterEdgeFadeFrame(
     internal val topPercent: Int,
 ) : FrameLayout(context) {
     private val paint = Paint()
-    private val opaque = Color.argb(255, 0, 0, 0)
-    private val clear = Color.argb(0, 0, 0, 0)
 
     override fun dispatchDraw(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
-        if ((leftPercent <= 0 && topPercent <= 0) || width <= 0f || height <= 0f) {
+        val left = leftEdgeFadeRamp(width, leftPercent)
+        val top = topEdgeFadeRamp(height, topPercent)
+        if (left == null && top == null) {
             super.dispatchDraw(canvas)
             return
         }
@@ -44,23 +77,31 @@ internal class ClusterEdgeFadeFrame(
         // and speed panels) keep their own alpha instead of being cut by the same mask.
         val checkpoint = canvas.saveLayer(0f, 0f, width, height, null)
         super.dispatchDraw(canvas)
-        // DST_IN keeps the destination and scales its alpha by the source alpha, so the video fades
+        // DST_IN keeps the destination and scales its alpha by the source alpha: the video fades
         // out along the ramp and the panel behind the window shows through.
         paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        if (leftPercent > 0) {
-            val stop = width * leftPercent / 100f
-            paint.shader = LinearGradient(0f, 0f, stop, 0f, opaque, clear, Shader.TileMode.CLAMP)
-            canvas.drawRect(0f, 0f, stop, height, paint)
+        left?.let {
+            paint.shader = rampShader(it)
+            canvas.drawRect(0f, 0f, it.toX, height, paint)
         }
-        if (topPercent > 0) {
-            val stop = height * topPercent / 100f
-            paint.shader = LinearGradient(0f, 0f, 0f, stop, opaque, clear, Shader.TileMode.CLAMP)
-            canvas.drawRect(0f, 0f, width, stop, paint)
+        top?.let {
+            paint.shader = rampShader(it)
+            canvas.drawRect(0f, 0f, width, it.toY, paint)
         }
         paint.shader = null
         paint.xfermode = null
         canvas.restoreToCount(checkpoint)
     }
+
+    private fun rampShader(ramp: EdgeFadeRamp): LinearGradient = LinearGradient(
+        ramp.fromX,
+        ramp.fromY,
+        ramp.toX,
+        ramp.toY,
+        Color.argb(ramp.edgeAlpha, 0, 0, 0),
+        Color.argb(ramp.innerAlpha, 0, 0, 0),
+        Shader.TileMode.CLAMP,
+    )
 }
 
 /** The blending mode the driver picked, clamped to a known value. */

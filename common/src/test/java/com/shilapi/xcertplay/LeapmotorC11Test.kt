@@ -261,6 +261,31 @@ class LeapmotorC11Test {
     }
 
     /**
+     * The ramp runs from the panel edge inward: gone at the seam, fully back at the band's inner end.
+     * Reversed (visible at the edge, erased inside) the hard edge survives and a band disappears out of
+     * the middle of the map instead — the first build of this fade did exactly that on the car.
+     */
+    @Test fun theTransparentFadeStartsAtThePanelEdgeAndEndsOpaque() {
+        val left = leftEdgeFadeRamp(720f, 27)!!
+        assertEquals(0f, left.fromX)
+        assertEquals(0f, left.fromY)
+        assertEquals(194.4f, left.toX, 0.01f)
+        assertEquals(0f, left.toY)
+        assertEquals("the map must be gone at the left seam", 0, left.edgeAlpha)
+        assertEquals("and fully back 27 % in", 255, left.innerAlpha)
+
+        val top = topEdgeFadeRamp(720f, 10)!!
+        assertEquals(0f, top.fromY)
+        assertEquals(72f, top.toY, 0.01f)
+        assertEquals("the map must be gone at the top seam", 0, top.edgeAlpha)
+        assertEquals("and fully back 10 % down", 255, top.innerAlpha)
+
+        assertNull("a zero width is no band at all", leftEdgeFadeRamp(720f, 0))
+        assertNull(topEdgeFadeRamp(720f, 0))
+        assertNull("no width to ramp over", leftEdgeFadeRamp(0f, 27))
+    }
+
+    /**
      * The fade has to sit above the video: a SurfaceView clears the canvas of the region it draws, so
      * a fade added before it is erased on the first frame and the map stays hard-edged. The helper
      * inserts it right after the video, and lays it out like the video, so it still covers the square
