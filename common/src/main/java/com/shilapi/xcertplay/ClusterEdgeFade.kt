@@ -7,6 +7,7 @@ import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
+import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.widget.FrameLayout
 
@@ -44,6 +45,24 @@ internal fun topEdgeFadeRamp(height: Float, percent: Int): EdgeFadeRamp? {
 }
 
 /**
+ * The radius of the rounded corner where the two bands meet, in pixels.
+ *
+ * Two straight ramps each finish on a straight line, so the map's clear region ends in a right angle at
+ * the point where they meet and the joint reads as an abrupt corner. The frame takes that tip away with
+ * a radial fade — the R angle of a corner. Half the narrower band keeps the rounding in proportion when
+ * the driver narrows the fades, and nothing is rounded unless both bands exist to form a corner.
+ */
+internal fun cornerFilletRadius(leftPixels: Float, topPixels: Float): Float {
+    if (leftPixels <= 0f || topPixels <= 0f) return 0f
+    return (minOf(leftPixels, topPixels) * 0.5f).coerceIn(MIN_FILLET_RADIUS, MAX_FILLET_RADIUS)
+}
+
+private const val MIN_FILLET_RADIUS = 8f
+
+/** A wide radius eats map for no visible gain once it is past a tenth of the panel. */
+private const val MAX_FILLET_RADIUS = 72f
+
+/**
  * The C11 projection's left and top edges, faded out by taking alpha away from the video itself.
  *
  * This is the difference from [ClusterEdgeMaskView]: nothing is painted over the map. The frame keeps
@@ -63,6 +82,13 @@ internal class ClusterEdgeFadeFrame(
     internal val topPercent: Int,
 ) : FrameLayout(context) {
     private val paint = Paint()
+
+    /** The R angle actually in use, 0 when there is no corner to round. */
+    internal fun filletRadius(): Float {
+        val left = leftEdgeFadeRamp(width.toFloat(), leftPercent) ?: return 0f
+        val top = topEdgeFadeRamp(height.toFloat(), topPercent) ?: return 0f
+        return cornerFilletRadius(left.toX, top.toY)
+    }
 
     override fun dispatchDraw(canvas: Canvas) {
         val width = width.toFloat()
@@ -87,6 +113,25 @@ internal class ClusterEdgeFadeFrame(
         top?.let {
             paint.shader = rampShader(it)
             canvas.drawRect(0f, 0f, width, it.toY, paint)
+        }
+        // The two ramps finish on straight lines, so their corner is a right angle. A radial fade whose
+        // alpha is opaque at that point and runs out at `fillet` takes the tip away: the map's corner
+        // becomes the R angle of a corner instead of a square joint. It decays to nothing at its own
+        // edge, so it never adds a visible boundary, and it stays far inside both bands, so the safe
+        // area declared to the phone is untouched.
+        if (left != null && top != null) {
+            val fillet = cornerFilletRadius(left.toX, top.toY)
+            if (fillet > 0f) {
+                paint.shader = RadialGradient(
+                    left.toX,
+                    top.toY,
+                    fillet,
+                    Color.argb(255, 0, 0, 0),
+                    Color.argb(0, 0, 0, 0),
+                    Shader.TileMode.CLAMP,
+                )
+                canvas.drawCircle(left.toX, top.toY, fillet, paint)
+            }
         }
         paint.shader = null
         paint.xfermode = null

@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.LinearGradient
+import android.graphics.RadialGradient
 import android.graphics.Shader
 import android.graphics.Matrix
 import android.graphics.SurfaceTexture
@@ -194,7 +195,8 @@ internal class ClusterMapPresentation(
                             " display=${display.displayId}" +
                             " square=${leap.width}x${leap.height}@${leap.left},${leap.top}" +
                             " window=$leapWindow left=${alphaFadeFrame.leftPercent}%" +
-                            " top=${alphaFadeFrame.topPercent}% above=TextureView"
+                            " top=${alphaFadeFrame.topPercent}%" +
+                            " corner=${alphaFadeFrame.filletRadius().toInt()}px above=TextureView"
                     },
                 )
                 LeapmotorClusterLayout.MASK_MODE_COLOR -> {
@@ -421,6 +423,20 @@ internal class ClusterEdgeMaskView(
             val stop = height * topPercent / 100f
             paint.shader = LinearGradient(0f, 0f, 0f, stop, blended(1f), blended(0f), Shader.TileMode.CLAMP)
             canvas.drawRect(0f, 0f, width, stop, paint)
+        }
+        // The band's inner corner is a right angle where the two ramps finish, and that tip is what
+        // reads as abrupt. The same R angle as the transparent fade, in colour: a patch that is opaque
+        // at the corner and runs out at the fillet radius. Clipped to the map's side, so it fills the
+        // corner sliver instead of thickening either band.
+        val leftStop = width * leftPercent / 100f
+        val topStop = height * topPercent / 100f
+        val fillet = cornerFilletRadius(leftStop, topStop)
+        if (fillet > 0f) {
+            val checkpoint = canvas.save()
+            canvas.clipRect(leftStop, topStop, width, height)
+            paint.shader = RadialGradient(leftStop, topStop, fillet, blended(1f), blended(0f), Shader.TileMode.CLAMP)
+            canvas.drawCircle(leftStop, topStop, fillet, paint)
+            canvas.restoreToCount(checkpoint)
         }
         paint.shader = null
     }

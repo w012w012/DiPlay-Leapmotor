@@ -286,6 +286,20 @@ class LeapmotorC11Test {
     }
 
     /**
+     * Two straight ramps leave the map's corner as a right angle; the frame takes that tip away with a
+     * radial fade — the R angle of the corner. Half the narrower band keeps it in proportion, and there
+     * is nothing to round unless both bands exist.
+     */
+    @Test fun theCornerIsRoundedByHalfTheNarrowerBand() {
+        assertEquals(36f, cornerFilletRadius(194.4f, 72f))
+        assertEquals(0f, cornerFilletRadius(0f, 72f))
+        assertEquals(0f, cornerFilletRadius(194.4f, 0f))
+        // Narrowing the bands keeps the rounding in proportion, with a floor and a ceiling.
+        assertEquals(8f, cornerFilletRadius(6f, 4f))
+        assertEquals(72f, cornerFilletRadius(400f, 300f))
+    }
+
+    /**
      * The fade has to sit above the video: a SurfaceView clears the canvas of the region it draws, so
      * a fade added before it is erased on the first frame and the map stays hard-edged. The helper
      * inserts it right after the video, and lays it out like the video, so it still covers the square
