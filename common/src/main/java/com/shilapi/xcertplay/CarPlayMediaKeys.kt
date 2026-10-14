@@ -61,6 +61,19 @@ internal object CarPlayMediaKeys {
     private var focusOwner: Any? = null
     private var focusEventRevision = 0L
     private var focusHeld = false
+
+    /**
+     * Where the session log picks up what this module did. Every key it forwards to the iPhone and
+     * every focus change it is handed goes here: those two lines decide whether music stops during a
+     * navigation prompt because DiPlay forwarded a pause, because a car app took focus, or because
+     * neither happened. Logcat alone never reaches a diagnostic report.
+     */
+    @Volatile var onDiagnostic: ((String) -> Unit)? = null
+
+    private fun report(message: String) {
+        Log.i(TAG, message)
+        runCatching { onDiagnostic?.invoke(message) }
+    }
     private var appContext: Context? = null
     private var mediaAudioActive = false
     private var nowPlaying = CarPlayNowPlaying()
@@ -261,7 +274,7 @@ internal object CarPlayMediaKeys {
         val audio = appContext?.getSystemService(AudioManager::class.java) ?: return
         focusHeld = request.request(audio) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
         if (focusHeld) forwardGrantedFocusLocked()
-        Log.i(TAG, "audio focus regained=$focusHeld")
+        report("audio focus regained=$focusHeld")
     }
 
     private fun updateLocked(active: Boolean) {
@@ -306,7 +319,7 @@ internal object CarPlayMediaKeys {
             setMetadata(androidMetadata(nowPlaying, shownArtworkLocked()))
             isActive = true
         }
-        Log.i(TAG, "media keys active focusDisabled=$focusDisabled focusGranted=$granted")
+        report("media keys active focusDisabled=$focusDisabled focusGranted=$granted")
     }
 
     private fun forwardGrantedFocusLocked() {
@@ -333,7 +346,9 @@ internal object CarPlayMediaKeys {
             }
         }
         if (!current) return
-        Log.i(TAG, "audio focus change=$change")
+        // -1 permanent, -2 transient, -3 transient-can-duck, 1 gain. The car's own voice assistant
+        // and navigation ask for transient gain; whoever hears about it is whoever must go quiet.
+        report("media key audio focus change=$change")
         // Resolve the matching sink and invoke it outside the media-key monitor. An abandoned
         // request must never mute a newer controller, and these owners must not nest locks.
         val background = CarPlayBackgroundSession.snapshot()
@@ -389,11 +404,11 @@ internal object CarPlayMediaKeys {
         // While the car's video player is on screen the wheel drives it: a CarPlay play/pause would
         // make the iPhone end the video session.
         if (CarPlayVideo.onMediaKey(index)) {
-            Log.i(TAG, "media key $source -> car video player $index")
+            report("media key $source -> car video player $index")
             return
         }
         val sent = synchronized(this) { controller }?.sendMediaButton(index) ?: false
-        Log.i(TAG, "media key $source -> CarPlay $index sent=$sent")
+        report("media key $source -> CarPlay $index sent=$sent")
     }
 
     /** A steering-wheel media key captured outside the Android key stream (Geely/Lynk). */

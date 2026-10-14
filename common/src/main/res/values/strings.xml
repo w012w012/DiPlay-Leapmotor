@@ -556,6 +556,11 @@
     <string name="leapmotor_cluster_mask_top">Cluster mask, top fade</string>
     <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
     <string name="leapmotor_cluster_mask_description">Blends the projected dashboard map into the gauges beside and above it, the way the car’s own tools do. The widths follow the 720-pixel square; 0 %% turns a fade off.</string>
+    <string name="leapmotor_cluster_mask_mode">Cluster mask, blending</string>
+    <string name="leapmotor_cluster_mask_mode_alpha">Transparent fade (recommended)</string>
+    <string name="leapmotor_cluster_mask_mode_color">Colour band</string>
+    <string name="leapmotor_cluster_mask_mode_off">Off</string>
+    <string name="leapmotor_cluster_mask_mode_description">The transparent fade dissolves the edge of the projection itself, so the gauges behind it show through; the colour band paints the measured night or day colour there instead. Applies the next time the instrument map starts.</string>
     <string name="leapmotor_cluster_mask_reset">Reset mask widths</string>
     <string name="adb_battery_reading_percent_only">Battery: %1$d %%.</string>
     <string name="c11_log_data_waiting">Waiting for the head unit\'s own logs (gear, battery and speed appear once the car prints them with ADB access ready).</string>

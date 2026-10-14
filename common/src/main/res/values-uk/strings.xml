@@ -492,6 +492,11 @@
     <string name="leapmotor_cluster_mask_top">Маска приладової панелі: верхній перехід</string>
     <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
     <string name="leapmotor_cluster_mask_description">Плавно поєднує спроєктовану карту з приладами навколо неї, як це роблять штатні інструменти автомобіля. Ширина відлічується від квадрата 720 пікселів; 0 %% вимикає перехід.</string>
+    <string name="leapmotor_cluster_mask_mode">Маска приладів: спосіб змішування</string>
+    <string name="leapmotor_cluster_mask_mode_alpha">Прозорий градієнт (рекомендовано)</string>
+    <string name="leapmotor_cluster_mask_mode_color">Колірна смуга</string>
+    <string name="leapmotor_cluster_mask_mode_off">Вимкнено</string>
+    <string name="leapmotor_cluster_mask_mode_description">Прозорий градієнт розчиняє край самої проєкції, і штатна приладова панель просвічує крізь нього; колірна смуга натомість зафарбовує край виміряним нічним або денним кольором. Застосовується наступного запуску карти на приладах.</string>
     <string name="leapmotor_cluster_mask_reset">Скинути ширини маски</string>
     <string name="adb_battery_reading_percent_only">Батарея: %1$d %%.</string>
     <string name="c11_log_data_waiting">Очікування власних журналів головного пристрою (передача, батарея та швидкість з’являться, коли автомобіль виведе їх із готовим доступом ADB).</string>

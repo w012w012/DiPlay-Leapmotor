@@ -554,6 +554,11 @@
     <string name="leapmotor_cluster_mask_top">クラスターマスク：上部フェード</string>
     <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
     <string name="leapmotor_cluster_mask_description">投影したダッシュボードマップを周囲の純正メーターになじませます（車側ツールと同じ手法）。幅は720ピクセルの正方形基準。0 %%でその側のフェードを無効にします。</string>
+    <string name="leapmotor_cluster_mask_mode">クラスターマスク：ブレンド方法</string>
+    <string name="leapmotor_cluster_mask_mode_alpha">透過グラデーション（推奨）</string>
+    <string name="leapmotor_cluster_mask_mode_color">カラーバンド</string>
+    <string name="leapmotor_cluster_mask_mode_off">オフ</string>
+    <string name="leapmotor_cluster_mask_mode_description">透過グラデーションは投影映像の縁そのものを透明にし、後ろの純正メーターを透かします。カラーバンドは実測した夜間または昼間の色を縁に塗ります。次にメーター地図を開始したときに反映されます。</string>
     <string name="leapmotor_cluster_mask_reset">マスク幅をリセット</string>
     <string name="adb_battery_reading_percent_only">バッテリー：%1$d %%</string>
     <string name="c11_log_data_waiting">車載端末自身のログを待っています（ADB許可後に車がデータを出力すると、ギア・バッテリー・車速が表示されます）。</string>

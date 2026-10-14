@@ -480,6 +480,11 @@
     <string name="leapmotor_cluster_mask_top">Маска приборной панели: верхний переход</string>
     <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
     <string name="leapmotor_cluster_mask_description">Плавно сводит спроецированную карту с приборами вокруг неё, как делают штатные инструменты автомобиля. Ширина отсчитывается от квадрата 720 пикселей; 0 %% отключает переход.</string>
+    <string name="leapmotor_cluster_mask_mode">Маска приборов: способ смешивания</string>
+    <string name="leapmotor_cluster_mask_mode_alpha">Прозрачный градиент (рекомендуется)</string>
+    <string name="leapmotor_cluster_mask_mode_color">Цветовая полоса</string>
+    <string name="leapmotor_cluster_mask_mode_off">Выключено</string>
+    <string name="leapmotor_cluster_mask_mode_description">Прозрачный градиент растворяет край самой проекции, и штатная приборная панель просвечивает сквозь него; цветовая полоса вместо этого закрашивает край измеренным ночным или дневным цветом. Применяется при следующем запуске карты на приборах.</string>
     <string name="leapmotor_cluster_mask_reset">Сбросить ширины маски</string>
     <string name="adb_battery_reading_percent_only">Батарея: %1$d %%.</string>
     <string name="c11_log_data_waiting">Ожидание собственных журналов головного устройства (передача, батарея и скорость появятся, когда автомобиль выведет их при готовом доступе ADB).</string>

@@ -517,6 +517,11 @@
     <string name="leapmotor_cluster_mask_top">儀表遮罩：頂部過渡</string>
     <string name="leapmotor_cluster_mask_percent">%1$d%%</string>
     <string name="leapmotor_cluster_mask_description">把投屏的儀表地圖與周圍的原車錶盤融為一體（與原廠工具的做法相同）。寬度按 720 像素方形畫面計算；0%% 表示關閉該側過渡。</string>
+    <string name="leapmotor_cluster_mask_mode">儀表遮罩：融合方式</string>
+    <string name="leapmotor_cluster_mask_mode_alpha">透明漸層（推薦）</string>
+    <string name="leapmotor_cluster_mask_mode_color">顏色漸層</string>
+    <string name="leapmotor_cluster_mask_mode_off">關閉</string>
+    <string name="leapmotor_cluster_mask_mode_description">透明漸層讓投影畫面自身的邊緣淡出，露出後方的原車儀表；顏色漸層則在邊緣塗上實測的夜間或日間車色。下次儀表地圖啟動時生效。</string>
     <string name="leapmotor_cluster_mask_reset">恢復預設遮罩寬度</string>
     <string name="adb_battery_reading_percent_only">電池：%1$d%%。</string>
     <string name="c11_log_data_waiting">正在等待車機自身日誌（ADB 授權就緒且車輛印出資料後，擋位、電量、車速會出現）。</string>

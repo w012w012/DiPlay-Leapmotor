@@ -5150,6 +5150,9 @@ class CarPlayHostActivity : ComponentActivity() {
         // Their findings go into the diagnostic report so the car can be checked without ADB.
         LeapmotorMediaKeys.onDiagnostic = { line -> appendLog(line) }
         LeapmotorGearMonitor.onDiagnostic = { line -> appendLog(line) }
+        // Media keys and the audio focus they hold decide whether music pauses under a navigation
+        // prompt; both used to be logcat-only, which no report carries.
+        CarPlayMediaKeys.onDiagnostic = { line -> appendLog(line) }
         // Which window draws the cluster map, and whether its edge fade went on above the video:
         // logcat alone is not enough, because the report carries the session log, not logcat.
         ClusterProjectionState.onDiagnostic = { line -> appendLog(line) }
@@ -5763,6 +5766,7 @@ class CarPlayHostActivity : ComponentActivity() {
         LeapmotorGearMonitor.detach(oldController)
         LeapmotorMediaKeys.onDiagnostic = null
         LeapmotorGearMonitor.onDiagnostic = null
+        CarPlayMediaKeys.onDiagnostic = null
         ClusterProjectionState.onDiagnostic = null
         CarPlayBackgroundSession.clear(oldController)
         controller = null

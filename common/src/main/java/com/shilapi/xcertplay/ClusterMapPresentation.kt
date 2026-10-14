@@ -107,6 +107,9 @@ internal class ClusterMapPresentation(
                     " panel=${size.x}x${size.y} window=$leapWindow dark=$dark",
             )
         }
+        val maskMode = if (leap != null) clusterEdgeFadeMode(context) else LeapmotorClusterLayout.MASK_MODE_OFF
+        val alphaFade = leap != null && maskMode == LeapmotorClusterLayout.MASK_MODE_ALPHA
+        val alphaFadeFrame = if (alphaFade) clusterEdgeFadeFrame(context) else null
         if (plan != null) {
             val textureView = TextureView(context)
             fun transform() {
@@ -135,6 +138,25 @@ internal class ClusterMapPresentation(
             videoView = textureView
             if (plan.fullMap) root.addView(InstrumentContrastView(context, plan, backdrop), FrameLayout.LayoutParams(-1, -1))
             Log.i(TAG, "layout=$theme viewport=$plan source=${plan.sourceLeft},${plan.sourceTop} dark=$dark")
+        } else if (alphaFade) {
+            // The alpha fade needs the video in the window's own layer: a SurfaceView is composited
+            // under the window, so nothing drawn here can give it alpha, and its black would show
+            // through wherever the fade made the texture transparent.
+            val video = ClusterVideoTexture(
+                context,
+                bufferWidth = leap!!.width,
+                bufferHeight = leap.height,
+            ) { surface ->
+                outputSurface = surface
+                onSurface(surface)
+            }
+            if (alphaFadeFrame == null) {
+                root.addView(video, videoParams)
+            } else {
+                alphaFadeFrame.addView(video, FrameLayout.LayoutParams(-1, -1))
+                root.addView(alphaFadeFrame, videoParams)
+            }
+            videoView = video
         } else {
             // Preserve the original PR renderer for DiLink 5 and unverified firmware.
             val surfaceView = SurfaceView(context)
@@ -160,22 +182,41 @@ internal class ClusterMapPresentation(
             videoView = surfaceView
         }
         // The C11's cluster renderer keeps its own gauges around the square projection, so the map
-        // would otherwise end in a hard line against them. The fade goes directly above the video and
-        // takes its layout; see attachClusterEdgeMask for why that order is not optional.
+        // would otherwise end in a hard line against them. The video view is already built above;
+        // this only says what happened, because an exported report is what a car test is judged on.
         if (leap != null) {
-            val mask = attachClusterEdgeMask(root, videoView, videoParams, context, dark)
-            if (mask == null) {
-                ClusterProjectionState.mask(
-                    "leapmotor mask off: both widths are 0, nothing drawn window=$leapWindow",
+            when (maskMode) {
+                LeapmotorClusterLayout.MASK_MODE_ALPHA -> ClusterProjectionState.mask(
+                    if (alphaFadeFrame == null) {
+                        "leapmotor mask off: both widths are 0, nothing drawn mode=alpha"
+                    } else {
+                        "leapmotor mask attached route=presentation mode=alpha" +
+                            " display=${display.displayId}" +
+                            " square=${leap.width}x${leap.height}@${leap.left},${leap.top}" +
+                            " window=$leapWindow left=${alphaFadeFrame.leftPercent}%" +
+                            " top=${alphaFadeFrame.topPercent}% above=TextureView"
+                    },
                 )
-            } else {
-                edgeMaskView = mask
-                ClusterProjectionState.mask(
-                    "leapmotor mask attached route=presentation display=${display.displayId}" +
-                        " square=${leap.width}x${leap.height}@${leap.left},${leap.top} window=$leapWindow" +
-                        " left=${mask.leftPercent}% top=${mask.topPercent}% night=$dark" +
-                        " above=${videoView?.javaClass?.simpleName}",
-                )
+                LeapmotorClusterLayout.MASK_MODE_COLOR -> {
+                    // The measured colour band, painted above the video; see attachClusterEdgeMask
+                    // for why that order is not optional.
+                    val mask = attachClusterEdgeMask(root, videoView, videoParams, context, dark)
+                    if (mask == null) {
+                        ClusterProjectionState.mask(
+                            "leapmotor mask off: both widths are 0, nothing drawn mode=color",
+                        )
+                    } else {
+                        edgeMaskView = mask
+                        ClusterProjectionState.mask(
+                            "leapmotor mask attached route=presentation mode=color" +
+                                " display=${display.displayId}" +
+                                " square=${leap.width}x${leap.height}@${leap.left},${leap.top} window=$leapWindow" +
+                                " left=${mask.leftPercent}% top=${mask.topPercent}% night=$dark" +
+                                " above=${videoView?.javaClass?.simpleName}",
+                        )
+                    }
+                }
+                else -> ClusterProjectionState.mask("leapmotor mask off: mode off")
             }
         }
         val waitingColor = if (dark) Color.WHITE else Color.DKGRAY

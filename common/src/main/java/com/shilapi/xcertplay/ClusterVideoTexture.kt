@@ -7,6 +7,9 @@ import android.view.TextureView
 
 /** Owns only the Surface wrapper; returning true lets TextureView release its texture. */
 internal class ClusterVideoTexture(context: Context, private val onPresented: () -> Unit = {},
+    /** The square cluster stream is 720x720; the main screen's is not. */
+    private val bufferWidth: Int = 1920,
+    private val bufferHeight: Int = 720,
     private val onSurface: (Surface?) -> Unit) :
     TextureView(context), java.io.Closeable {
     private var output: Surface? = null
@@ -16,7 +19,7 @@ internal class ClusterVideoTexture(context: Context, private val onPresented: ()
         surfaceTextureListener = object : SurfaceTextureListener {
             override fun onSurfaceTextureAvailable(texture: SurfaceTexture, width: Int, height: Int) {
                 releaseOutput()
-                texture.setDefaultBufferSize(1920, 720)
+                texture.setDefaultBufferSize(bufferWidth, bufferHeight)
                 output = Surface(texture).also(onSurface)
             }
             override fun onSurfaceTextureSizeChanged(texture: SurfaceTexture, width: Int, height: Int) = Unit

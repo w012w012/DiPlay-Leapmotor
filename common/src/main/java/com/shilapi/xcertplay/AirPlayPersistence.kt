@@ -88,6 +88,7 @@ object AirPlayPersistence {
     private const val KEY_CLUSTER_MAP_SCALE = "cluster_map_scale_percent"
     private const val KEY_CLUSTER_MASK_LEFT = "leapmotor_cluster_mask_left_percent"
     private const val KEY_CLUSTER_MASK_TOP = "leapmotor_cluster_mask_top_percent"
+    private const val KEY_CLUSTER_MASK_MODE = "leapmotor_cluster_mask_mode"
     private const val KEY_CLUSTER_CONTENT = "cluster_content"
     private const val KEY_CLUSTER_MARKER_X = "cluster_marker_horizontal_step"
     private const val KEY_CLUSTER_MARKER_Y = "cluster_marker_vertical_step"
@@ -817,6 +818,19 @@ object AirPlayPersistence {
     fun saveClusterMaskTopPercent(context: Context, percent: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(KEY_CLUSTER_MASK_TOP, percent.coerceIn(0, 100)).apply()
+    }
+
+    /**
+     * How the C11 projection's left and top edges meet the car's own gauges: an alpha fade that lets
+     * the gauges show through the video, the measured colour band, or nothing at all.
+     */
+    fun loadClusterMaskMode(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_CLUSTER_MASK_MODE, LeapmotorClusterLayout.DEFAULT_MASK_MODE)
+
+    fun saveClusterMaskMode(context: Context, mode: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_CLUSTER_MASK_MODE, mode).apply()
     }
 
     /** Whether the driver ever moved the cluster marker sliders away from the built-in default. */

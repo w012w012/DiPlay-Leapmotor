@@ -45,6 +45,22 @@ internal object LeapmotorClusterLayout {
     const val DEFAULT_MASK_TOP_PERCENT = 10
     const val MASK_STEP_PERCENT = 1
 
+    /**
+     * How the projection meets the gauges around it.
+     *
+     * [MASK_MODE_ALPHA] fades the video itself out along its left and top edges, so the car's own
+     * gauges show through: nothing is painted over the map, which is why it blends with any theme.
+     * It needs the cluster window on a [android.view.TextureView]: a SurfaceView is composited under
+     * the window, so nothing the window draws can give it alpha.
+     *
+     * [MASK_MODE_COLOR] paints the measured colour band instead — what LeapTool's baked PNGs do, and
+     * the only option that works on the SurfaceView path.
+     */
+    const val MASK_MODE_ALPHA = 0
+    const val MASK_MODE_COLOR = 1
+    const val MASK_MODE_OFF = 2
+    const val DEFAULT_MASK_MODE = MASK_MODE_ALPHA
+
     fun isC11(fingerprint: String = Build.FINGERPRINT): Boolean =
         fingerprint.contains(FINGERPRINT_PART, ignoreCase = true)
 

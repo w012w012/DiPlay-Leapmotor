@@ -2134,6 +2134,23 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         // the blend can follow whatever the firmware draws around the square.
                         val maskLeftPercent = AirPlayPersistence.loadClusterMaskLeftPercent(this)
                         val maskTopPercent = AirPlayPersistence.loadClusterMaskTopPercent(this)
+                        val maskModes = listOf(
+                            LeapmotorClusterLayout.MASK_MODE_ALPHA,
+                            LeapmotorClusterLayout.MASK_MODE_COLOR,
+                            LeapmotorClusterLayout.MASK_MODE_OFF,
+                        )
+                        val maskModeLabels = listOf(
+                            getString(R.string.leapmotor_cluster_mask_mode_alpha),
+                            getString(R.string.leapmotor_cluster_mask_mode_color),
+                            getString(R.string.leapmotor_cluster_mask_mode_off),
+                        )
+                        choice(card, getString(R.string.leapmotor_cluster_mask_mode),
+                            maskModeLabels,
+                            maskModes.indexOf(clusterEdgeFadeMode(this)).coerceAtLeast(0),
+                            reconnects = false) { index ->
+                            AirPlayPersistence.saveClusterMaskMode(this, maskModes[index])
+                            render()
+                        }
                         val maskSteps = (1..100 step LeapmotorClusterLayout.MASK_STEP_PERCENT).toList()
                         card.addView(overlaySliderRow(
                             getString(R.string.leapmotor_cluster_mask_left),
@@ -5472,6 +5489,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine("CarPlay setup: ${if (setupError == null) "ready" else "authentication unavailable"}")
         appendLine("Saved video preference (may differ from active session): ${if (AirPlayPersistence.loadHevcEnabled(appContext)) "HEVC" else "H.264"}; ${AirPlayPersistence.loadFps(appContext)} fps")
         appendLine("Media-key audio focus: ${if (AirPlayPersistence.loadDisableMediaKeyAudioFocus(appContext)) "disabled" else "enabled"}")
+        // Which side of the focus story is armed: the sink only mutes media when its own focus is
+        // enabled, and auto-yield decides whether a car app's transient gain silences CarPlay.
+        appendLine(
+            "Audio focus: sink=${AirPlayPersistence.loadAudioFocusEnabled(appContext)}" +
+                " autoYield=${AirPlayPersistence.loadAudioFocusAutoYield(appContext)}" +
+                " mediaChannel=${AirPlayPersistence.loadMediaAudioChannel(appContext)}" +
+                " navigationChannel=${AirPlayPersistence.loadNavigationAudioChannel(appContext)}",
+        )
         appendLine("MTK decoder tuning preference: ${if (AirPlayPersistence.loadMtkDecoderTuning(appContext)) "enabled" else "disabled"}")
         appendLine("CarPlay size: ${com.shilapi.xcertplay.airplay.CarPlaySize.fromWidthMillimeters(AirPlayPersistence.loadWidthPhysicalMm(appContext)).label}")
         appendLine("Saved resolution preference (may differ from active session): ${AirPlayPersistence.loadDisplayScalePercent(appContext)}%")

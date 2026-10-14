@@ -209,6 +209,31 @@ class LeapmotorC11Test {
         assertEquals(27, clusterEdgeMask(app)?.leftPercent)
     }
 
+    /** The alpha fade is the default; the painted band stays available and 0 widths still mean none. */
+    @Test fun theTransparentFadeIsTheDefaultAndTheBandStaysAvailable() {
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_ALPHA, clusterEdgeFadeMode(app))
+        val frame = clusterEdgeFadeFrame(app)
+        assertNotNull("the C11 square gets a fade frame by default", frame)
+        assertEquals(27, frame!!.leftPercent)
+        assertEquals(10, frame.topPercent)
+
+        AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_COLOR)
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_COLOR, clusterEdgeFadeMode(app))
+        assertNull("the frame belongs to the alpha mode only", clusterEdgeFadeFrame(app))
+        assertNotNull("the colour mode still builds the painted band", clusterEdgeMask(app))
+
+        AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_OFF)
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_OFF, clusterEdgeFadeMode(app))
+        assertNull(clusterEdgeFadeFrame(app))
+
+        AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_ALPHA)
+        AirPlayPersistence.saveClusterMaskLeftPercent(app, 0)
+        AirPlayPersistence.saveClusterMaskTopPercent(app, 0)
+        assertNull("no width, no fade", clusterEdgeFadeFrame(app))
+        AirPlayPersistence.saveClusterMaskLeftPercent(app, LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT)
+        AirPlayPersistence.saveClusterMaskTopPercent(app, LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT)
+    }
+
     /**
      * The fade has to sit above the video: a SurfaceView clears the canvas of the region it draws, so
      * a fade added before it is erased on the first frame and the map stays hard-edged. The helper
