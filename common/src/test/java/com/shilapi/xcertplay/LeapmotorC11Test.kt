@@ -84,14 +84,40 @@ class LeapmotorC11Test {
         assertEquals(720, config.heightPixels)
         assertEquals(30, config.fps)
         assertEquals(CarPlayClusterDisplay.MAP_URL, config.initialUrl)
-        assertEquals(AirPlayInsets(top = 255, bottom = 39, left = 255, right = 255), config.safeArea)
+        // Only the faded band is declared off-limits: 27 % left, 10 % top, nothing on the two edges
+        // that meet the panel.
+        assertEquals(AirPlayInsets(top = 216, bottom = 0, left = 97, right = 97), config.safeArea)
+    }
+
+    /**
+     * The BYD cluster's measured safe area (35 % per side) must not reach the C11 square: on a 720 px
+     * square it left the route a 210x426 column, which reads as a tiny map on the instrument cluster.
+     */
+    @Test fun theSquareGivesTheMapFarMoreRoomThanTheBydClusterSafeArea() {
+        val c11 = LeapmotorClusterLayout.streamConfig(CarPlayClusterDisplay.Content.MAP).safeArea!!
+        val byd = CarPlayClusterDisplay.config(
+            widthPixels = 720,
+            heightPixels = 720,
+            content = CarPlayClusterDisplay.Content.MAP,
+        ).safeArea!!
+        fun area(insets: AirPlayInsets) =
+            (720 - insets.left - insets.right) * (720 - insets.top - insets.bottom)
+        // What the C11 square declared before this fix, straight from the car's own report.
+        val previous = (720 - 255 - 255) * (720 - 111 - 183)
+        assertEquals(210 * 426, previous)
+        assertEquals(526 * 504, area(c11))
+        assertTrue(
+            "the C11 square must give the map far more room: ${area(c11)} vs $previous before" +
+                " and ${area(byd)} on the BYD safe area",
+            area(c11) > previous * 2,
+        )
     }
 
     @Test fun theMarkerSlidersMoveTheSafeArea() {
         val centred = LeapmotorClusterLayout.streamConfig(
             CarPlayClusterDisplay.Content.MAP, markerYPercent = 50,
         )
-        assertEquals(AirPlayInsets(top = 147, bottom = 147, left = 255, right = 255), centred.safeArea)
+        assertEquals(AirPlayInsets(top = 36, bottom = 36, left = 97, right = 97), centred.safeArea)
     }
 
     @Test fun theC11MeterDisplayIsFoundByPanelGeometry() {

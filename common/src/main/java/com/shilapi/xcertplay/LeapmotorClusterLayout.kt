@@ -6,6 +6,7 @@ import android.hardware.display.DisplayManager
 import android.os.Build
 import android.view.Display
 import com.shilapi.xcertplay.airplay.AirPlayDisplayConfig
+import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 
 /**
@@ -124,15 +125,25 @@ internal object LeapmotorClusterLayout {
     }
 
     /**
-     * The square dashboard stream. The safe area keeps Apple Maps' car marker inside the part of
-     * the square the cluster leaves uncovered; the default comes from the 0.2.15-245 build, and the
-     * marker sliders move it when that measurement does not fit this firmware.
+     * The square dashboard stream. The safe area keeps Apple Maps' car marker inside the part of the
+     * square the cluster leaves uncovered: the driver's marker sliders move it when that measurement
+     * does not fit this firmware.
+     *
+     * [coveredInsets] is only the band this square's own edges use — the faded strip, and nothing on
+     * the two sides that abut the panel edge. The BYD cluster's measured area (35 % per side) must not
+     * leak in here: on a 720 px square it left the route a 210 px column and a 426 px row.
      */
     fun streamConfig(
         content: CarPlayClusterDisplay.Content,
         scalePercent: Int = DEFAULT_SCALE_PERCENT,
         markerXPercent: Int = DEFAULT_MARKER_X_PERCENT,
         markerYPercent: Int = DEFAULT_MARKER_Y_PERCENT,
+        coveredInsets: AirPlayInsets = AirPlayInsets(
+            top = DEFAULT_MASK_TOP_PERCENT,
+            bottom = 0,
+            left = DEFAULT_MASK_LEFT_PERCENT,
+            right = 0,
+        ),
     ): AirPlayDisplayConfig = CarPlayClusterDisplay.config(
         widthPixels = STREAM_SIZE,
         heightPixels = STREAM_SIZE,
@@ -140,5 +151,6 @@ internal object LeapmotorClusterLayout {
         content = content,
         markerXPercent = markerXPercent,
         markerYPercent = markerYPercent,
+        baseSafeArea = coveredInsets,
     )
 }

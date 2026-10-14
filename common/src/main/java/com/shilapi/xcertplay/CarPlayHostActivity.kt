@@ -82,6 +82,7 @@ import com.shilapi.xcertplay.airplay.CarPlayUiScale
 import com.shilapi.xcertplay.airplay.AirPlayDisplayConfig
 import com.shilapi.xcertplay.airplay.AirPlayIdentity
 import com.shilapi.xcertplay.airplay.AirPlayIcon
+import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.airplay.AirPlaySafeArea
 import com.shilapi.xcertplay.airplay.AirPlaySession
@@ -1395,6 +1396,14 @@ class CarPlayHostActivity : ComponentActivity() {
                         scalePercent = scale,
                         markerXPercent = markerX,
                         markerYPercent = markerY,
+                        // Only the band this square's own edges use is off-limits to the map. The
+                        // BYD figure (35 % per side) shrank the route to a fraction of the square.
+                        coveredInsets = AirPlayInsets(
+                            top = AirPlayPersistence.loadClusterMaskTopPercent(this).coerceAtLeast(MIN_COVERED_PERCENT),
+                            bottom = 0,
+                            left = AirPlayPersistence.loadClusterMaskLeftPercent(this).coerceAtLeast(MIN_COVERED_PERCENT),
+                            right = 0,
+                        ),
                     ).also {
                         MapMirrors.streamAspect = it.widthPixels.toDouble() / it.heightPixels
                         appendLog("Cluster map: Leapmotor square ${it.widthPixels}x${it.heightPixels} scale=$scale marker=$markerX/$markerY safeArea=${it.safeArea}")
@@ -6235,6 +6244,8 @@ class CarPlayHostActivity : ComponentActivity() {
         const val TAG = "xcertplay-usb"
         const val SCREEN_TYPE_MAIN = 110
         const val SCREEN_TYPE_ALT = 111
+        /** A degenerate safe area is refused by some phones, so a sliver always stays declared. */
+        const val MIN_COVERED_PERCENT = 3
         // On the teardown thread: bounded sequencing wait. Release notification retains ownership beyond
         // this budget when a codec is still busy.
         const val SINK_RELEASE_WAIT_MILLIS = 2_000L
