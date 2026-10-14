@@ -15,6 +15,7 @@ import android.graphics.Point
 import android.hardware.display.DisplayManager
 import android.os.Bundle
 import android.util.Log
+import kotlin.math.roundToInt
 import android.view.Display
 import android.view.Gravity
 import android.view.Surface
@@ -46,6 +47,7 @@ internal class ClusterMapPresentation(
     private var waitingLabel: View? = null
     private var turnCardView: ClusterTurnCardView? = null
     private var videoView: View? = null
+    private var edgeMaskView: ClusterEdgeMaskView? = null
     private var streamActive = false
     var outputSurface: Surface? = null
         private set
@@ -99,7 +101,12 @@ internal class ClusterMapPresentation(
                 leftMargin = plan.left; topMargin = plan.top
             }
         }
-        if (leap != null) Log.i(TAG, "leapmotor viewport=$leap window=$leapWindow")
+        if (leap != null) {
+            ClusterProjectionState.note(
+                "leapmotor viewport square=${leap.width}x${leap.height}@${leap.left},${leap.top}" +
+                    " panel=${size.x}x${size.y} window=$leapWindow dark=$dark",
+            )
+        }
         if (plan != null) {
             val textureView = TextureView(context)
             fun transform() {
@@ -151,6 +158,25 @@ internal class ClusterMapPresentation(
             })
             root.addView(surfaceView, videoParams)
             videoView = surfaceView
+        }
+        // The C11's cluster renderer keeps its own gauges around the square projection, so the map
+        // would otherwise end in a hard line against them. The fade goes directly above the video and
+        // takes its layout; see attachClusterEdgeMask for why that order is not optional.
+        if (leap != null) {
+            val mask = attachClusterEdgeMask(root, videoView, videoParams, context, dark)
+            if (mask == null) {
+                ClusterProjectionState.mask(
+                    "leapmotor mask off: both widths are 0, nothing drawn window=$leapWindow",
+                )
+            } else {
+                edgeMaskView = mask
+                ClusterProjectionState.mask(
+                    "leapmotor mask attached route=presentation display=${display.displayId}" +
+                        " square=${leap.width}x${leap.height}@${leap.left},${leap.top} window=$leapWindow" +
+                        " left=${mask.leftPercent}% top=${mask.topPercent}% night=$dark" +
+                        " above=${videoView?.javaClass?.simpleName}",
+                )
+            }
         }
         val waitingColor = if (dark) Color.WHITE else Color.DKGRAY
         val density = context.resources.displayMetrics.density
@@ -216,6 +242,14 @@ internal class ClusterMapPresentation(
     fun setTurnCardNightMode(night: Boolean) {
         turnCardView?.setNightMode(night)
     }
+
+    /** The edge fades follow the same day/night choice as the turn card, so they never stand out. */
+    fun setMaskNightMode(night: Boolean) {
+        edgeMaskView?.setNight(night)
+    }
+
+    /** ClusterEdgeMaskView's saved widths, for the diagnostics line. */
+    val maskWidths: Pair<Int, Int>? get() = edgeMaskView?.let { it.leftPercent to it.topPercent }
 
     fun setTurnCardOpacity(percent: Int) {
         turnCardView?.setOpacity(percent)
@@ -290,9 +324,104 @@ internal class ClusterMapPresentation(
     }
 }
 
-/** Shading belongs to DiPlay's map only; no stock cluster window is changed or covered outside the side card. */
-private class InstrumentContrastView(
+/**
+ * The C11 projection's left and top edge fades, over the video. LeapTool covers the same seam with
+ * static PNG masks whose alpha ramp is baked in; the measured night mask is a left band about 27% of
+ * the square wide, in the panel's own night blue, and its day pair is the same shape in the panel's
+ * light grey. Drawing both ramps and cross-fading between them keeps the seam matched to the gauges
+ * whether the car is in its light or its dark cluster theme.
+ *
+ * Shared by every projection window the C11 can present through: the cluster Presentation and the
+ * ADB activity route, so the seam is blended whichever window the firmware picks.
+ */
+internal class ClusterEdgeMaskView(
     context: Context,
+    internal val leftPercent: Int,
+    internal val topPercent: Int,
+) : View(context) {
+    private var night = true
+    private var nightWeight = 1f
+    private val paint = Paint()
+
+    fun setNight(value: Boolean) {
+        if (night == value) return
+        night = value
+        // A short fade beats a snap: the car's own gauges also transition over a beat.
+        val from = nightWeight
+        val to = if (value) 1f else 0f
+        animate()?.cancel()
+        animate().setDuration(300).setUpdateListener { animation ->
+            nightWeight = from + (to - from) * animation.animatedFraction
+            invalidate()
+        }.start()
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val width = width.toFloat(); val height = height.toFloat()
+        // Measured from the car's own mask tool: night sits on the cluster's dark blue, day on its
+        // light grey. Each band is fully opaque at the panel edge and clear at its inner end, so the
+        // map surfaces through the ramp.
+        val nightColor = Color.rgb(31, 44, 75)
+        val dayColor = Color.rgb(234, 237, 246)
+        val weight = nightWeight.coerceIn(0f, 1f)
+        fun blended(a: Float): Int =
+            Color.argb((a * 255).roundToInt(),
+                (Color.red(dayColor) + (Color.red(nightColor) - Color.red(dayColor)) * weight).roundToInt(),
+                (Color.green(dayColor) + (Color.green(nightColor) - Color.green(dayColor)) * weight).roundToInt(),
+                (Color.blue(dayColor) + (Color.blue(nightColor) - Color.blue(dayColor)) * weight).roundToInt(),
+            )
+        if (leftPercent > 0) {
+            val stop = width * leftPercent / 100f
+            paint.shader = LinearGradient(0f, 0f, stop, 0f, blended(1f), blended(0f), Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, stop, height, paint)
+        }
+        if (topPercent > 0) {
+            val stop = height * topPercent / 100f
+            paint.shader = LinearGradient(0f, 0f, 0f, stop, blended(1f), blended(0f), Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, width, stop, paint)
+        }
+        paint.shader = null
+    }
+}
+
+/** Builds the edge mask when the C11's saved widths ask for one; null keeps the window untouched. */
+internal fun clusterEdgeMask(context: Context): ClusterEdgeMaskView? {
+    val left = AirPlayPersistence.loadClusterMaskLeftPercent(context)
+    val top = AirPlayPersistence.loadClusterMaskTopPercent(context)
+    if (left <= 0 && top <= 0) return null
+    return ClusterEdgeMaskView(context, left, top)
+}
+
+/**
+ * Puts the C11 edge fade directly above the projection's video view, laid out like the video.
+ *
+ * The position is not cosmetic. The video is a `SurfaceView`, and `SurfaceView.draw()` clears the
+ * canvas of the region it draws, so a fade added before it is erased on the first frame; an opaque
+ * `TextureView` would hide it just as completely. Inserting it right after the video keeps that fact
+ * in one place instead of depending on the caller's add order. Taking the video's layout keeps the
+ * fade on the square even when the firmware refuses the resized window and the map is placed with
+ * margins inside a full-panel window.
+ */
+internal fun attachClusterEdgeMask(
+    root: FrameLayout,
+    video: View?,
+    videoParams: FrameLayout.LayoutParams,
+    context: Context,
+    night: Boolean,
+): ClusterEdgeMaskView? {
+    val mask = clusterEdgeMask(context) ?: return null
+    mask.setNight(night)
+    root.addView(
+        mask,
+        if (video == null) root.childCount else root.indexOfChild(video) + 1,
+        FrameLayout.LayoutParams(videoParams),
+    )
+    return mask
+}
+
+/** Shading belongs to DiPlay's map only; no stock cluster window is changed or covered outside the side card. */
+private class InstrumentContrastView(    context: Context,
     private val plan: DiLink51ClusterLayout.Plan,
     private val background: Int,
 ) : View(context) {

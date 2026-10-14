@@ -514,6 +514,13 @@
     <string name="adb_vehicle_speed_reading">车速：%1$d 公里/小时。</string>
     <string name="adb_vehicle_speed_unreadable">此固件上无法读取车速。</string>
     <string name="adb_vehicle_gear_reading">挡位：%1$s。</string>
+    <string name="leapmotor_cluster_mask_left">仪表遮罩：左侧过渡</string>
+    <string name="leapmotor_cluster_mask_top">仪表遮罩：顶部过渡</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d%%</string>
+    <string name="leapmotor_cluster_mask_description">把投屏的仪表地图与周围的原车表盘融为一体（与原厂工具的做法相同）。宽度按 720 像素方形画面计算；0%% 表示关闭该侧过渡。</string>
+    <string name="leapmotor_cluster_mask_reset">恢复默认遮罩宽度</string>
+    <string name="adb_battery_reading_percent_only">电池：%1$d%%。</string>
+    <string name="c11_log_data_waiting">正在等待车机自身日志（ADB 授权就绪且车辆打印出数据后，挡位、电量、车速会出现）。</string>
     <string name="adb_vehicle_gear_unreadable">此固件上无法读取挡位。</string>
     <string name="advanced_vehicle_data">高级车辆数据</string>
     <string name="hide_advanced_vehicle_data">收起高级车辆数据</string>

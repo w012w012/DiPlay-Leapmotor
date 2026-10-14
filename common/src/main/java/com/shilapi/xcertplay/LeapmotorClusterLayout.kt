@@ -37,6 +37,14 @@ internal object LeapmotorClusterLayout {
     /** The square stream is requested at its native size unless the driver changes it. */
     const val DEFAULT_SCALE_PERCENT = 100
 
+    /**
+     * The panel edge the map would otherwise cut into abruptly. LeapTool's instrument mask covers the
+     * same edges with a baked PNG; the gradient here is drawn instead, in the panel's own night colour.
+     */
+    const val DEFAULT_MASK_LEFT_PERCENT = 27
+    const val DEFAULT_MASK_TOP_PERCENT = 10
+    const val MASK_STEP_PERCENT = 1
+
     fun isC11(fingerprint: String = Build.FINGERPRINT): Boolean =
         fingerprint.contains(FINGERPRINT_PART, ignoreCase = true)
 

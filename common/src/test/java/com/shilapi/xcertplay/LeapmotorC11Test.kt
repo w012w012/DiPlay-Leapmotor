@@ -4,10 +4,16 @@ import android.content.Context
 import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.view.Display
+import android.view.Gravity
+import android.view.SurfaceView
+import android.view.View
+import android.widget.FrameLayout
 import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -118,5 +124,155 @@ class LeapmotorC11Test {
         } finally {
             ShadowDisplayManager.removeDisplay(id)
         }
+    }
+
+    @Test fun theGearIsReadFromTheSomeIpLogLine() {
+        assertEquals(3, C11LogcatProtocol.gearValue("10-12 21:01:58.501  1234  5678 I C11CarSomeIp: onMessage  eventId: 1110 value: 3"))
+        assertEquals("R", C11LogcatProtocol.gearName(1))
+        assertEquals("N", C11LogcatProtocol.gearName(2))
+        assertEquals("D", C11LogcatProtocol.gearName(3))
+        assertEquals("P", C11LogcatProtocol.gearName(4))
+        assertNull(C11LogcatProtocol.gearName(0))
+    }
+
+    /** The real 2023 C11 prints the gear over three bridge lines; the value line carries the number. */
+    @Test fun theBridgeThreeLineGearIsRead() {
+        assertEquals(3, C11LogcatProtocol.gearValue(
+            "MediaTlog - CtrlService: Recive the gear is : 3"))
+        assertNull(C11LogcatProtocol.gearValue("MediaTlog - CtrlService: Start recive someIp message eventId is : 1110"))
+        assertNull(C11LogcatProtocol.gearValue("MediaTlog - CtrlService: End recive someIp message eventId is : 1110"))
+    }
+
+    /** The cluster's XML nodes republish the position with an attribute on the tag. */
+    @Test fun theAttributedXmlGearIsRead() {
+        assertEquals(1, C11LogcatProtocol.gearValue("C11CarXml: node_name : gear  setTextContent: 1"))
+        assertEquals(2, C11LogcatProtocol.gearValue("C11AirConditioner: node_name : gear  setTextContent: 2"))
+        assertEquals(2, C11LogcatProtocol.gearValue("<Seat><gear type=\"int\">2</gear></Seat>"))
+        assertNull(C11LogcatProtocol.gearValue("AroundService: dealShift mShift 3"))
+    }
+
+    @Test fun anotherEventIdIsNotReadAsTheGear() {
+        assertNull(C11LogcatProtocol.gearValue("onMessage  eventId: 11100 value: 3"))
+        assertNull(C11LogcatProtocol.gearValue("onMessage  eventId: 9110 value: 3"))
+        assertNull(C11LogcatProtocol.gearValue("nothing interesting here"))
+    }
+
+    /** The captured battery XML: `<Battery><BatteryModel .../><figure type="int">36</figure>`. */
+    @Test fun theBatteryFigureIsReadAsTheSoc() {
+        assertEquals(36, C11LogcatProtocol.socValue(
+            "C11CarXml: xmlStr: <carcontrol><Battery><BatteryModel type=\"int\">2</BatteryModel>" +
+                "<figure type=\"int\">36</figure></Battery></carcontrol>"))
+        assertNull(C11LogcatProtocol.socValue("<figureMin type=\"int\">0</figureMin>"))
+        assertNull(C11LogcatProtocol.socValue("nothing interesting here"))
+    }
+
+    /** The speed candidates the capture shows while parked; the unit still awaits a driving capture. */
+    @Test fun theBridgeSpeedCandidatesAreRead() {
+        assertEquals(10, C11LogcatProtocol.speedValue(
+            "logerss : SpeechSomeIP CanSubSomeIP eventId==21180, message==10"))
+        assertEquals(20, C11LogcatProtocol.speedValue(
+            "logerss : SpeechSomeIP CanSubSomeIP eventId==21181, message==20"))
+        assertEquals(0, C11LogcatProtocol.speedValue(
+            "logerss : SpeechSomeIP CanSubSomeIP eventId==21180, message==0"))
+        assertNull(C11LogcatProtocol.speedValue("eventId==21181, message==400"))
+    }
+
+    @Test fun theEdgeFadeWidthsFollowTheMeasuredMask() {
+        assertEquals(27, LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT)
+        assertEquals(10, LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT)
+    }
+
+    /** A bare `<figure>` is not the battery: the line must name the battery block, or nothing is read. */
+    @Test fun aBareFigureIsNotTheBatteryReading() {
+        assertNull(C11LogcatProtocol.socValue("<figure type=\"int\">36</figure>"))
+        assertEquals(36, C11LogcatProtocol.socValue(
+            "<Battery><figure type=\"int\">36</figure><figureMin type=\"int\">0</figureMin></Battery>"))
+    }
+
+    /** The rare battery and speed lines need a wider window than the one-second gear poll offers. */
+    @Test fun theSlowPollWidensTheWindowForTheBattery() {
+        val fast = C11LogcatProtocol.pollCommand()
+        val slow = C11LogcatProtocol.slowPollCommand()
+        assertTrue(slow.startsWith("logcat -d -t 40000"))
+        assertTrue(slow.contains("<Battery"))
+        assertTrue(slow.contains("eventId==2118"))
+        assertFalse(slow.contains("C11SmartContrl"))
+        assertFalse(fast.contains("<Battery"))
+    }
+
+    /** Both widths at zero means no fade at all, so the view is never built. */
+    @Test fun aZeroWidthFadeIsNotBuiltAtAll() {
+        AirPlayPersistence.saveClusterMaskLeftPercent(app, 0)
+        AirPlayPersistence.saveClusterMaskTopPercent(app, 0)
+        assertNull(clusterEdgeMask(app))
+        AirPlayPersistence.saveClusterMaskLeftPercent(app, 27)
+        assertEquals(27, clusterEdgeMask(app)?.leftPercent)
+    }
+
+    /**
+     * The fade has to sit above the video: a SurfaceView clears the canvas of the region it draws, so
+     * a fade added before it is erased on the first frame and the map stays hard-edged. The helper
+     * inserts it right after the video, and lays it out like the video, so it still covers the square
+     * when the window is not pinned to the viewport.
+     */
+    @Test fun theEdgeFadeIsInsertedAboveTheVideo() {
+        AirPlayPersistence.saveClusterMaskLeftPercent(app, 27)
+        AirPlayPersistence.saveClusterMaskTopPercent(app, 10)
+        val root = FrameLayout(app)
+        val video = SurfaceView(app)
+        val params = FrameLayout.LayoutParams(720, 720, Gravity.TOP or Gravity.LEFT).apply { leftMargin = 1200 }
+        root.addView(video, params)
+        root.addView(View(app), FrameLayout.LayoutParams(-1, -1))
+        val mask = attachClusterEdgeMask(root, video, params, app, night = true)
+        assertNotNull("the fade must be built when a width is set", mask)
+        assertEquals(root.indexOfChild(video) + 1, root.indexOfChild(mask))
+        assertEquals(720, mask!!.layoutParams.width)
+        assertEquals(720, mask.layoutParams.height)
+        assertEquals(1200, (mask.layoutParams as FrameLayout.LayoutParams).leftMargin)
+    }
+
+    /**
+     * The route decision and the fade's fate have to reach the report: they used to be logcat-only,
+     * and the report carries the session log, so a missing fade and a missing log line looked alike.
+     */
+    @Test fun theProjectionRouteAndFadeAreReported() {
+        ClusterProjectionState.reset()
+        val lines = mutableListOf<String>()
+        ClusterProjectionState.onDiagnostic = { lines.add(it) }
+        try {
+            ClusterProjectionState.presentation("cluster presentation shown display=2 name=HDMI")
+            ClusterProjectionState.mask("leapmotor mask attached route=presentation left=27% top=10%")
+            val report = ClusterProjectionState.reportLines().joinToString("\n")
+            assertTrue(report.contains("clusterProjectionRoutes=1"))
+            assertTrue(report.contains("clusterProjectionPresentation=cluster presentation shown display=2"))
+            assertTrue(report.contains("clusterProjectionMask=leapmotor mask attached route=presentation"))
+            assertTrue(lines.any { it.contains("mask attached") })
+        } finally {
+            ClusterProjectionState.onDiagnostic = null
+            ClusterProjectionState.reset()
+        }
+    }
+
+    @Test fun thePollCommandStaysBoundedAndExcludesOurOwnPrints() {
+        val command = C11LogcatProtocol.pollCommand()
+        assertTrue(command.startsWith("logcat -d -t 2000"))
+        assertTrue(command.contains("C11CarSomeIp"))
+        assertTrue(command.contains("grep -v 'DiPlay-'"))
+        assertTrue(command.contains("tail -n 600"))
+    }
+
+    @Test fun theWheelProbeRecognisesWheelAndVoiceLines() {
+        assertTrue(C11LogcatProtocol.isWheelLine("onMessage WHEEL_360_ID value: 48"))
+        assertTrue(C11LogcatProtocol.isWheelLine("com.leapmotor.steerwheelcontrol.media"))
+        assertTrue(C11LogcatProtocol.isWheelLine("MediaTlog: keyEvent 87"))
+        assertFalse(C11LogcatProtocol.isWheelLine("C11CarXml: <status><gear>2</gear></status>"))
+        // The music widgets' progress refreshes are not wheel events; bare `music` floods the report.
+        assertFalse(C11LogcatProtocol.isWheelLine("MediaTlog - BtMusicManager: mBtReceiver pbb is : PlaybackState"))
+        assertFalse(C11LogcatProtocol.isWheelLine("MusicWidget: [播放状态] isPlaying=true"))
+    }
+
+    @Test fun theC11TagFilterMatchesOnlyTheBridgeTags() {
+        assertTrue(C11LogcatProtocol.isC11Line("10-12 21:01:58.501 I C11CarSomeIp: hello"))
+        assertFalse(C11LogcatProtocol.isC11Line("10-12 21:01:58.501 I ActivityManager: hello"))
     }
 }

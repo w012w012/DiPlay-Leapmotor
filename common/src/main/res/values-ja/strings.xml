@@ -550,6 +550,13 @@
     <string name="adb_vehicle_speed_reading">車速：%1$d km/h</string>
     <string name="adb_vehicle_speed_unreadable">このファームウェアでは車速を読み取れません。</string>
     <string name="adb_vehicle_gear_reading">ギア：%1$s</string>
+    <string name="leapmotor_cluster_mask_left">クラスターマスク：左側フェード</string>
+    <string name="leapmotor_cluster_mask_top">クラスターマスク：上部フェード</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
+    <string name="leapmotor_cluster_mask_description">投影したダッシュボードマップを周囲の純正メーターになじませます（車側ツールと同じ手法）。幅は720ピクセルの正方形基準。0 %%でその側のフェードを無効にします。</string>
+    <string name="leapmotor_cluster_mask_reset">マスク幅をリセット</string>
+    <string name="adb_battery_reading_percent_only">バッテリー：%1$d %%</string>
+    <string name="c11_log_data_waiting">車載端末自身のログを待っています（ADB許可後に車がデータを出力すると、ギア・バッテリー・車速が表示されます）。</string>
     <string name="adb_vehicle_gear_unreadable">このファームウェアではギア位置を読み取れません。</string>
     <string name="advanced_vehicle_data">高度な車両データ</string>
     <string name="hide_advanced_vehicle_data">高度な車両データを非表示</string>

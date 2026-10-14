@@ -476,6 +476,13 @@
     <string name="adb_vehicle_speed_reading">سرعة السيارة: %1$d كم/س.</string>
     <string name="adb_vehicle_speed_unreadable">تعذّرت قراءة سرعة السيارة على هذا البرنامج الثابت.</string>
     <string name="adb_vehicle_gear_reading">وضع ناقل الحركة: %1$s.</string>
+    <string name="leapmotor_cluster_mask_left">قناع العدادات: تلاشٍ أيسر</string>
+    <string name="leapmotor_cluster_mask_top">قناع العدادات: تلاشٍ علوي</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d٪</string>
+    <string name="leapmotor_cluster_mask_description">يمزج الخريطة المسقطة مع العدادات المحيطة بها كما تفعل أدوات السيارة نفسها. تقاس الأعرض على مربع 720 بكسل؛ 0٪ يعطل التلاشٍ.</string>
+    <string name="leapmotor_cluster_mask_reset">استعادة أعرض القناع الافتراضية</string>
+    <string name="adb_battery_reading_percent_only">البطارية: %1$d٪.</string>
+    <string name="c11_log_data_waiting">في انتظار سجلات وحدة القيادة نفسها (تظهر حالة ناقل الحركة والبطارية والسرعة عندما تطبعها السيارة مع جهوزية الوصول عبر ADB).</string>
     <string name="adb_vehicle_gear_unreadable">تعذّرت قراءة وضع ناقل الحركة على هذا البرنامج الثابت.</string>
     <string name="advanced_vehicle_data">بيانات السيارة المتقدمة</string>
     <string name="hide_advanced_vehicle_data">إخفاء بيانات السيارة المتقدمة</string>

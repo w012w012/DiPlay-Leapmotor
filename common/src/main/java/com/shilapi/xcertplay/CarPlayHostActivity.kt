@@ -1152,7 +1152,9 @@ class CarPlayHostActivity : ComponentActivity() {
         }
         if (clusterPresentation != null) return
         val display = ClusterMapPresentation.findDisplay(this, theme) ?: run {
-            appendLog("Cluster map: no cluster projection display among ${ClusterMapPresentation.describeDisplays(this)}")
+            ClusterProjectionState.presentation(
+                "cluster presentation skipped: no projection display among ${ClusterMapPresentation.describeDisplays(this)}",
+            )
             return
         }
         val presentation = ClusterMapPresentation(this, display, theme) { surface -> runOnUiThread { onClusterSurface(surface) } }
@@ -1169,12 +1171,15 @@ class CarPlayHostActivity : ComponentActivity() {
             clusterPresentation = presentation
             updateClusterMapShown()
             presentation.setStreamActive(SCREEN_TYPE_ALT in activeScreenStreamTypes)
+            presentation.setMaskNightMode(darkMode)
             applyClusterTurnOverlay()
-            Log.i(ClusterMapPresentation.TAG, "cluster presentation shown display=${display.displayId} name=${display.name}")
-            appendLog("Cluster map: presentation shown display=${display.displayId} name=${display.name}")
+            ClusterProjectionState.presentation(
+                "cluster presentation shown display=${display.displayId} name=${display.name}",
+            )
         } catch (error: RuntimeException) {
-            Log.w(ClusterMapPresentation.TAG, "cluster presentation failed", error)
-            appendLog("Cluster map: presentation failed ${error.javaClass.simpleName}: ${error.message}")
+            ClusterProjectionState.presentation(
+                "cluster presentation failed ${error.javaClass.simpleName}: ${error.message}",
+            )
         }
     }
 
@@ -1282,6 +1287,7 @@ class CarPlayHostActivity : ComponentActivity() {
             presentation.setTurnCardOverlay(xPercent, yPercent, sizePercent)
             presentation.setTurnCardOpacity(effectiveOpacity)
             presentation.setTurnCardNightMode(effectiveNight)
+            presentation.setMaskNightMode(darkMode)
             presentation.setTurnCardGuidance(if (overlay) clusterTurnGuidance else null)
         }
     }
@@ -5144,6 +5150,9 @@ class CarPlayHostActivity : ComponentActivity() {
         // Their findings go into the diagnostic report so the car can be checked without ADB.
         LeapmotorMediaKeys.onDiagnostic = { line -> appendLog(line) }
         LeapmotorGearMonitor.onDiagnostic = { line -> appendLog(line) }
+        // Which window draws the cluster map, and whether its edge fade went on above the video:
+        // logcat alone is not enough, because the report carries the session log, not logcat.
+        ClusterProjectionState.onDiagnostic = { line -> appendLog(line) }
         LeapmotorMediaKeys.attach(this, next)
         LeapmotorGearMonitor.attach(this, next)
         if (airPlayConfig.videoInCar) CarPlayVideo.attach(this, next)
@@ -5754,6 +5763,7 @@ class CarPlayHostActivity : ComponentActivity() {
         LeapmotorGearMonitor.detach(oldController)
         LeapmotorMediaKeys.onDiagnostic = null
         LeapmotorGearMonitor.onDiagnostic = null
+        ClusterProjectionState.onDiagnostic = null
         CarPlayBackgroundSession.clear(oldController)
         controller = null
         oldSink?.let(retiringSinks::add)

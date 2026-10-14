@@ -476,6 +476,13 @@
     <string name="adb_vehicle_speed_reading">Скорость автомобиля: %1$d км/ч.</string>
     <string name="adb_vehicle_speed_unreadable">На этой прошивке не удалось прочитать скорость автомобиля.</string>
     <string name="adb_vehicle_gear_reading">Передача: %1$s.</string>
+    <string name="leapmotor_cluster_mask_left">Маска приборной панели: левый переход</string>
+    <string name="leapmotor_cluster_mask_top">Маска приборной панели: верхний переход</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
+    <string name="leapmotor_cluster_mask_description">Плавно сводит спроецированную карту с приборами вокруг неё, как делают штатные инструменты автомобиля. Ширина отсчитывается от квадрата 720 пикселей; 0 %% отключает переход.</string>
+    <string name="leapmotor_cluster_mask_reset">Сбросить ширины маски</string>
+    <string name="adb_battery_reading_percent_only">Батарея: %1$d %%.</string>
+    <string name="c11_log_data_waiting">Ожидание собственных журналов головного устройства (передача, батарея и скорость появятся, когда автомобиль выведет их при готовом доступе ADB).</string>
     <string name="adb_vehicle_gear_unreadable">На этой прошивке не удалось прочитать передачу.</string>
     <string name="advanced_vehicle_data">Расширенные данные автомобиля</string>
     <string name="hide_advanced_vehicle_data">Скрыть расширенные данные</string>

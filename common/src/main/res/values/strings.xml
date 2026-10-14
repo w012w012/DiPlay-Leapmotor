@@ -552,6 +552,13 @@
     <string name="adb_vehicle_speed_reading">Vehicle speed: %1$d km/h.</string>
     <string name="adb_vehicle_speed_unreadable">Vehicle speed cannot be read on this firmware.</string>
     <string name="adb_vehicle_gear_reading">Gear: %1$s.</string>
+    <string name="leapmotor_cluster_mask_left">Cluster mask, left fade</string>
+    <string name="leapmotor_cluster_mask_top">Cluster mask, top fade</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
+    <string name="leapmotor_cluster_mask_description">Blends the projected dashboard map into the gauges beside and above it, the way the car’s own tools do. The widths follow the 720-pixel square; 0 %% turns a fade off.</string>
+    <string name="leapmotor_cluster_mask_reset">Reset mask widths</string>
+    <string name="adb_battery_reading_percent_only">Battery: %1$d %%.</string>
+    <string name="c11_log_data_waiting">Waiting for the head unit\'s own logs (gear, battery and speed appear once the car prints them with ADB access ready).</string>
     <string name="adb_vehicle_gear_unreadable">Gear cannot be read on this firmware.</string>
     <string name="advanced_vehicle_data">Advanced vehicle data</string>
     <string name="hide_advanced_vehicle_data">Hide advanced vehicle data</string>

@@ -7,18 +7,28 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.core.content.ContextCompat
+import com.shilapi.xcertplay.adb.AdbKeys
+import com.shilapi.xcertplay.adb.LocalAdb
 import com.shilapi.xcertplay.airplay.CarPlayMediaButton
 import com.shilapi.xcertplay.orchestration.CarPlayController
 
 /**
  * Leapmotor's gear position, and pausing CarPlay while reversing.
  *
- * The head unit publishes gear changes over CAN as `leapmotor.cantoapp.update` with the position in
- * the int extra `1010105`. Entering reverse must yield audio to the reversing camera and its parking
- * chimes, and the car to hand the screen back; leaving reverse resumes playback exactly where the
- * driver left off. Broadcasting pause is the only channel that reaches the iPhone — CarPlay has no
- * notion of gear.
+ * Entering reverse must yield audio to the reversing camera and its parking chimes, and the car to
+ * hand the screen back; leaving reverse resumes playback exactly where the driver left off.
+ * Broadcasting pause is the only channel that reaches the iPhone — CarPlay has no notion of gear.
+ *
+ * Two sources feed the gear. The S01/T03 builds publish `leapmotor.cantoapp.update` with the
+ * position in the int extra `1010105`, which stays registered as the broadcast route. The C11
+ * never sends it: there the gear and the steering-wheel keys are read from the head unit's own
+ * logs ([C11LogcatProtocol]) over the local ADB shell, the same route the car's own tools use.
+ * The log link is read-only and needs the driver's one-time ADB approval; without it the poll
+ * reports the access state once and keeps retrying quietly. Lines that look like steering-wheel
+ * or voice events are copied into the diagnostic report verbatim (bounded), so the key formats
+ * can be calibrated from a real capture.
  *
  * The same poll also refreshes the head unit's own record of DiPlay: pausing is only honoured while
  * the CarPlay is acknowledged as the active source, and no callback announces a lost registry entry.
@@ -36,6 +46,21 @@ internal object LeapmotorGearMonitor {
     private const val POLL_INTERVAL_MILLIS = 1000L
     private const val UNKNOWN_GEAR = -1
     private const val GEAR_REVERSE = 1
+    private const val ADB_RETRY_MILLIS = 30_000L
+    /** Steering-wheel lines copied into the report per session; the format is the point. */
+    private const val WHEEL_LINE_CAP = 400
+    private const val SAMPLE_LINE_CAP = 600
+    private const val SAMPLE_PER_POLL = 3
+    private const val HEARTBEAT_POLLS = 15L
+    /** The slowly changing readings get a much wider window, every this many polls. */
+    private const val SLOW_POLL_EVERY = 15L
+    /**
+     * How long a reading stays current. The car prints the battery's XML only when a value in it
+     * changes, so without this the settings card would show an old number as the present one.
+     */
+    private const val READING_FRESH_MILLIS = 600_000L
+    /** How many messages are remembered so a re-read buffer cannot double-process a line. */
+    private const val LINE_MEMORY = 600
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val lock = Any()
@@ -46,6 +71,17 @@ internal object LeapmotorGearMonitor {
     private var pollThread: Thread? = null
     private var rawGear: Int = UNKNOWN_GEAR
     private var pausedByReverse = false
+    private var adb: LocalAdb? = null
+    private var adbRetryAtMillis = 0L
+    private var lastAdbAccess: LocalAdb.Access? = null
+    @Volatile private var socValue: Int? = null
+    @Volatile private var speedKmhValue: Int? = null
+    @Volatile private var socAtMillis = 0L
+    @Volatile private var speedAtMillis = 0L
+    private val seenMessages = LinkedHashSet<String>()
+    private var wheelLinesLogged = 0
+    private var sampleLinesLogged = 0
+    private var pollCount = 0L
 
     fun gearName(): String? = when (rawGear) {
         UNKNOWN_GEAR -> null
@@ -101,6 +137,18 @@ internal object LeapmotorGearMonitor {
         pollThread = null
         rawGear = UNKNOWN_GEAR
         pausedByReverse = false
+        adb?.close()
+        adb = null
+        adbRetryAtMillis = 0L
+        lastAdbAccess = null
+        socValue = null
+        speedKmhValue = null
+        socAtMillis = 0L
+        speedAtMillis = 0L
+        synchronized(lock) { seenMessages.clear() }
+        wheelLinesLogged = 0
+        sampleLinesLogged = 0
+        pollCount = 0
         report("gear monitor detached")
     }
 
@@ -109,6 +157,7 @@ internal object LeapmotorGearMonitor {
         pollThread = Thread({
             while (!Thread.currentThread().isInterrupted) {
                 askUpgrade()
+                pollLogcat()
                 try {
                     Thread.sleep(POLL_INTERVAL_MILLIS)
                 } catch (_: InterruptedException) {
@@ -139,13 +188,154 @@ internal object LeapmotorGearMonitor {
         if (intent?.action != GEAR_ACTION) return
         val next = runCatching { intent.getIntExtra(GEAR_EXTRA, UNKNOWN_GEAR) }
             .getOrDefault(UNKNOWN_GEAR)
-        if (next == UNKNOWN_GEAR) return
+        applyGear(next, "broadcast")
+    }
+
+    /** Applies a gear reading from any source; true when the value actually changed. */
+    @Synchronized
+    private fun applyGear(next: Int, source: String): Boolean {
+        if (next == UNKNOWN_GEAR) return false
         val previous = rawGear
+        if (previous == next) return false
         rawGear = next
-        if (previous != next) {
-            report("gear raw=$previous -> $next (${gearName() ?: "?"})")
-            updateReverse(controller, next == GEAR_REVERSE)
+        report("gear raw=$previous -> $next (${gearName() ?: "?"}) source=$source")
+        updateReverse(controller, next == GEAR_REVERSE)
+        return true
+    }
+
+    /**
+     * Reads the C11's own logs for gear and steering-wheel events. The newest gear line in the
+     * window is the current position; wheel lines are copied into the report so a real capture
+     * can calibrate the key formats, and the remaining C11 lines are sampled so an unknown
+     * format still shows up.
+     */
+    private fun pollLogcat() {
+        val context = appContext ?: return
+        if (controller == null) return
+        val output = runAdb(context, C11LogcatProtocol.pollCommand()) ?: return
+        val lines = output.lineSequence().filter { it.isNotBlank() }.toList()
+        var lastGear: Int? = null
+        var lastSoc: Int? = null
+        var lastSpeed: Int? = null
+        var wheel = 0
+        var samples = 0
+        for (line in lines) {
+            val gear = C11LogcatProtocol.gearValue(line)
+            if (gear != null) {
+                lastGear = gear
+                continue
+            }
+            C11LogcatProtocol.socValue(line)?.let { lastSoc = it }
+            C11LogcatProtocol.speedValue(line)?.let { lastSpeed = it }
+            if (C11LogcatProtocol.isWheelLine(line)) {
+                if (wheelLinesLogged < WHEEL_LINE_CAP && rememberMessage(line)) {
+                    wheelLinesLogged++
+                    wheel++
+                    report("DiPlay-C11 wheel-line: $line")
+                }
+                continue
+            }
+            if (C11LogcatProtocol.isC11Line(line) && samples < SAMPLE_PER_POLL &&
+                sampleLinesLogged < SAMPLE_LINE_CAP && rememberMessage(line)
+            ) {
+                samples++
+                sampleLinesLogged++
+                report("DiPlay-C11 sample: $line")
+            }
         }
+        val matched = if (lastGear != null && applyGear(lastGear, "logcat")) 1 else 0
+        lastSoc?.let { publishSoc(it) }
+        lastSpeed?.let { publishSpeed(it) }
+        pollCount++
+        // Battery and wheel speed change slowly and the car prints them rarely, so the one-second
+        // window above seldom holds them; the same link is read wider every few seconds instead.
+        if (pollCount % SLOW_POLL_EVERY == 0L) pollSlowLogcat(context)
+        if (matched > 0 || wheel > 0 || pollCount % HEARTBEAT_POLLS == 0L) {
+            report(
+                "DiPlay-C11 poll rows=${lines.size} matched=$matched" +
+                    " gear=${gearName() ?: "?"} wheel=$wheel" +
+                    (lastSoc?.let { " soc=$it%" } ?: "") +
+                    (lastSpeed?.let { " speed=${it}km/h" } ?: ""),
+            )
+        }
+    }
+
+    /**
+     * Reads the same link over a much wider window for the readings that change slowly. Gear stays on
+     * the fast poll alone: it has to be caught within a second of the lever moving.
+     */
+    private fun pollSlowLogcat(context: Context) {
+        val output = runAdb(context, C11LogcatProtocol.slowPollCommand()) ?: return
+        var soc: Int? = null
+        var speed: Int? = null
+        var socLine: String? = null
+        for (line in output.lineSequence()) {
+            if (line.isBlank()) continue
+            C11LogcatProtocol.socValue(line)?.let { soc = it; socLine = line }
+            C11LogcatProtocol.speedValue(line)?.let { speed = it }
+        }
+        soc?.let { publishSoc(it, socLine) }
+        speed?.let { publishSpeed(it) }
+    }
+
+    /** Publishes the newest SOC reading for the settings page and the CarPlay battery report. */
+    @Synchronized
+    private fun publishSoc(percent: Int, evidence: String? = null) {
+        val changed = socValue != percent
+        socValue = percent
+        socAtMillis = SystemClock.elapsedRealtime()
+        // The raw line travels with the reading so the next report shows the exact format the car used.
+        if (changed) report("DiPlay-C11 soc=$percent%" + (evidence?.let { " line=${it.take(200)}" } ?: ""))
+    }
+
+    /** Publishes the newest wheel-speed reading for the settings page. */
+    @Synchronized
+    private fun publishSpeed(kmh: Int) {
+        val changed = speedKmhValue != kmh
+        speedKmhValue = kmh
+        speedAtMillis = SystemClock.elapsedRealtime()
+        if (changed) report("DiPlay-C11 speed=$kmh km/h")
+    }
+
+    /** The latest logcat readings; the settings page on the C11 shows these instead of BYD's probe. */
+    val socPercent: Int? get() = fresh(socValue, socAtMillis)
+    val speedKmh: Int? get() = fresh(speedKmhValue, speedAtMillis)
+
+    fun batteryReading(): Int? = fresh(socValue, socAtMillis)
+
+    /** A reading the car has not repeated for a while is not shown as if it were the current one. */
+    private fun fresh(value: Int?, atMillis: Long): Int? = value?.takeIf {
+        atMillis > 0L && SystemClock.elapsedRealtime() - atMillis < READING_FRESH_MILLIS
+    }
+
+    /** Runs one bounded command over the head unit's own adbd; never asks for approval. */
+    private fun runAdb(context: Context, command: String): String? {
+        val now = SystemClock.elapsedRealtime()
+        if (now < adbRetryAtMillis) return null
+        val client = adb ?: LocalAdb(AdbKeys.load(context)).also { adb = it }
+        val access = client.connect(mayAsk = false)
+        if (access != lastAdbAccess) {
+            lastAdbAccess = access
+            report("DiPlay-C11 adb=$access")
+        }
+        if (access != LocalAdb.Access.READY) {
+            adbRetryAtMillis = now + ADB_RETRY_MILLIS
+            return null
+        }
+        adbRetryAtMillis = 0L
+        return runCatching { client.shell(command) }.getOrNull()
+    }
+
+    /** True the first time a line's message is seen; repeated prints of the same text are dropped. */
+    private fun rememberMessage(line: String): Boolean = synchronized(lock) {
+        val key = line.substringAfter(": ", line)
+        if (!seenMessages.add(key)) return false
+        if (seenMessages.size > LINE_MEMORY) {
+            val oldest = seenMessages.iterator()
+            oldest.next()
+            oldest.remove()
+        }
+        true
     }
 
     /** Pause once on entering reverse; resume exactly once on leaving it. */

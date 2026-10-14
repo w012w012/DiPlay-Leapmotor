@@ -86,6 +86,8 @@ object AirPlayPersistence {
     private const val KEY_CENTER_MAP_AUTO_HIDE = "center_map_auto_hide"
     private const val KEY_LAUNCHER_MAP_SHARING = "launcher_map_sharing"
     private const val KEY_CLUSTER_MAP_SCALE = "cluster_map_scale_percent"
+    private const val KEY_CLUSTER_MASK_LEFT = "leapmotor_cluster_mask_left_percent"
+    private const val KEY_CLUSTER_MASK_TOP = "leapmotor_cluster_mask_top_percent"
     private const val KEY_CLUSTER_CONTENT = "cluster_content"
     private const val KEY_CLUSTER_MARKER_X = "cluster_marker_horizontal_step"
     private const val KEY_CLUSTER_MARKER_Y = "cluster_marker_vertical_step"
@@ -793,6 +795,28 @@ object AirPlayPersistence {
     fun saveClusterDisplayId(context: Context, displayId: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
             .putInt(KEY_CLUSTER_DISPLAY_ID, displayId).apply()
+    }
+
+    /** The C11 cluster mask's left fade width, as a percent of the square stream; 0 disables it. */
+    fun loadClusterMaskLeftPercent(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_CLUSTER_MASK_LEFT, LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT)
+            .coerceIn(0, 100)
+
+    fun saveClusterMaskLeftPercent(context: Context, percent: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_CLUSTER_MASK_LEFT, percent.coerceIn(0, 100)).apply()
+    }
+
+    /** The C11 cluster mask's top fade height, as a percent of the square stream; 0 disables it. */
+    fun loadClusterMaskTopPercent(context: Context): Int =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+            .getInt(KEY_CLUSTER_MASK_TOP, LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT)
+            .coerceIn(0, 100)
+
+    fun saveClusterMaskTopPercent(context: Context, percent: Int) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_CLUSTER_MASK_TOP, percent.coerceIn(0, 100)).apply()
     }
 
     /** Whether the driver ever moved the cluster marker sliders away from the built-in default. */

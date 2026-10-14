@@ -220,6 +220,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private var adbCheckInProgress = false
     private var adbCheckMayAsk = false
     private var adbCheckFailed = false
+    /** The C11 vehicle-data log link (read-only), shown in the cluster settings card. */
+    private var c11AdbState: BydAdbAccess.State? = null
+    private var c11AdbCheckInProgress = false
+    private var c11AdbCheckMayAsk = false
     private var vehicleProbeAuthorizationInProgress = false
     private var vehicleProbeInProgress = false
     private var vehicleProbeOutcome: BydVehicleProbeOutcome? = null
@@ -1551,7 +1555,13 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             // Tapping elsewhere closes the list and keeps the query; tapping the box reopens it.
             isOutsideTouchable = true
             inputMethodMode = PopupWindow.INPUT_METHOD_NEEDED
-            setIsLaidOutInScreen(true)
+            // The list is placed in screen coordinates. Android 10 made this call public; before it the
+            // same switch is setLayoutInScreenEnabled, and calling the new name stops the app.
+            if (Build.VERSION.SDK_INT >= 29) setIsLaidOutInScreen(true)
+            else runCatching {
+                PopupWindow::class.java.getMethod("setLayoutInScreenEnabled", Boolean::class.javaPrimitiveType)
+                    .invoke(this, true)
+            }
             positionSettingsSearchResults(box, this)
         }
     }
@@ -2119,6 +2129,75 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                                     if (index == 0) -1 else displays[index - 1].displayId)
                             }
                             card.addView(label(getString(R.string.leapmotor_cluster_display_description), 14, MUTED))
+                        }
+                        // The projection's left and top edge fades; the widths are adjustable so
+                        // the blend can follow whatever the firmware draws around the square.
+                        val maskLeftPercent = AirPlayPersistence.loadClusterMaskLeftPercent(this)
+                        val maskTopPercent = AirPlayPersistence.loadClusterMaskTopPercent(this)
+                        val maskSteps = (1..100 step LeapmotorClusterLayout.MASK_STEP_PERCENT).toList()
+                        card.addView(overlaySliderRow(
+                            getString(R.string.leapmotor_cluster_mask_left),
+                            maskSteps,
+                            maskLeftPercent,
+                        ) { it -> getString(R.string.leapmotor_cluster_mask_percent, it) }
+                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskLeftPercent(this, v) } })
+                        card.addView(overlaySliderRow(
+                            getString(R.string.leapmotor_cluster_mask_top),
+                            maskSteps,
+                            maskTopPercent,
+                        ) { it -> getString(R.string.leapmotor_cluster_mask_percent, it) }
+                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskTopPercent(this, v) } })
+                        card.addView(label(getString(R.string.leapmotor_cluster_mask_description), 14, MUTED))
+                        // Only worth a button once the sliders have moved off the measured default.
+                        if (maskLeftPercent != LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT ||
+                            maskTopPercent != LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT) {
+                            card.addView(button(getString(R.string.leapmotor_cluster_mask_reset), false) {
+                                AirPlayPersistence.saveClusterMaskLeftPercent(this, LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT)
+                                AirPlayPersistence.saveClusterMaskTopPercent(this, LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT)
+                                render()
+                            }, matchButton(10, 56))
+                        }
+                        // C11 vehicle data (gear, steering-wheel events) is read from the head
+                        // unit's own logs over the local ADB shell — read-only, approved once
+                        // on the car screen like the other ADB-backed features.
+                        if (c11AdbState == null && !c11AdbCheckInProgress) checkC11AdbState(mayAsk = false)
+                        val c11Adb = c11AdbState
+                        card.addView(label(
+                            when (c11Adb) {
+                                null -> getString(R.string.adb_not_checked)
+                                BydAdbAccess.State.READY -> getString(R.string.adb_access_ready)
+                                BydAdbAccess.State.NOT_APPROVED -> getString(R.string.adb_not_approved)
+                                BydAdbAccess.State.ADB_OFF -> getString(R.string.adb_off)
+                                BydAdbAccess.State.PAIRING_ONLY -> getString(R.string.adb_pairing_only)
+                            },
+                            14,
+                            if (c11Adb == BydAdbAccess.State.READY) MUTED else WARNING,
+                        ))
+                        if (c11AdbCheckInProgress) {
+                            card.addView(label(getString(
+                                if (c11AdbCheckMayAsk) R.string.adb_checking_may_ask else R.string.adb_checking,
+                            ), 14, MUTED))
+                        } else {
+                            card.addView(button(getString(R.string.check_adb_access), false) {
+                                checkC11AdbState(mayAsk = true)
+                            }, matchButton(10, 56))
+                        }
+                        // The C11 has no BYD probe to read: gear, battery and speed come from the
+                        // head unit's own logs, already running above. Show what they see.
+                        val gearNow = LeapmotorGearMonitor.gearName()
+                        val socNow = LeapmotorGearMonitor.batteryReading()
+                        val speedNow = LeapmotorGearMonitor.speedKmh
+                        if (gearNow != null || socNow != null || speedNow != null) {
+                            card.addView(label(
+                                listOf(
+                                    gearNow?.let { getString(R.string.adb_vehicle_gear_reading, it) },
+                                    socNow?.let { getString(R.string.adb_battery_reading_percent_only, it) },
+                                    speedNow?.let { getString(R.string.adb_vehicle_speed_reading, it) },
+                                ).filterNotNull().joinToString("  "),
+                                14, MUTED,
+                            ))
+                        } else {
+                            card.addView(label(getString(R.string.c11_log_data_waiting), 14, MUTED))
                         }
                     }
                     if (DiLink51ClusterLayout.supported() && !adbCluster) {
@@ -4354,6 +4433,25 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
     }
 
+    /** The C11 log link: handshake only, no BYD service reads. */
+    private fun checkC11AdbState(mayAsk: Boolean) {
+        if (c11AdbCheckInProgress) return
+        c11AdbCheckInProgress = true
+        c11AdbCheckMayAsk = mayAsk
+        if (mayAsk) render()
+        Thread({
+            val state = runCatching { BydAdbAccess.checkState(applicationContext, mayAsk) }
+                .getOrDefault(BydAdbAccess.State.ADB_OFF)
+            runOnUiThread {
+                if (isFinishing || isDestroyed) return@runOnUiThread
+                c11AdbState = state
+                c11AdbCheckInProgress = false
+                c11AdbCheckMayAsk = false
+                render()
+            }
+        }, "diplay-c11-adb-check").start()
+    }
+
     /** First probe or user retry: one click handles ADB authorization, probing and persistence. */
     private fun probeVehicleData(mayAsk: Boolean) =
         probeVehicleData(mayAsk, activateLegacyModeOnSuccess = false)
@@ -5383,6 +5481,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine()
         appendLine("--- Current cluster display diagnostics (even when disabled) ---")
         appendLine(ClusterMapPresentation.diagnosticReport(appContext))
+        // Which window drew the map, and whether the edge fade was attached above the video. The
+        // route decision only ever reached logcat before, so a report could not tell a missing fade
+        // from a missing log line.
+        ClusterProjectionState.reportLines().forEach { appendLine(it) }
         appendLine()
         appendLine("--- ADB cluster activity routing ---")
         appendLine("adbClusterActivityEnabled=${AirPlayPersistence.loadAdbClusterEnabled(appContext)}")
@@ -5427,6 +5529,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         appendLine("Startup settings: openAfterBoot=${AirPlayPersistence.loadAutoStartOnBoot(appContext)} " +
             "connectWhenOpened=${DiPlayPreferences.autoConnect(appContext)}")
         appendLine(WheelKeyService.report(appContext))
+        WheelKeyLog.report(WheelKeyService.connected()).forEach { appendLine(it) }
         appendLine()
         appendLine(UpdateAvailability.report(appContext, System.currentTimeMillis()))
         appendLine()

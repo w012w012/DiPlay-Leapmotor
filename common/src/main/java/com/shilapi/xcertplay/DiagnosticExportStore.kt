@@ -111,9 +111,20 @@ internal object DiagnosticExportStore {
         var file = File(directory, fileName)
         var copy = 1
         while (file.exists()) file = File(directory, "$base-${copy++}.txt")
+        // Some Android 9 FUSE mounts accept a write and still deliver an empty file to later
+        // readers. Write a sibling temp file, verify it byte for byte, and only then let it take
+        // the report's name, so a dropped write is caught while the report is still in hand.
+        val temp = File(directory, "$base.tmp")
         try {
-            file.writeText(report, Charsets.UTF_8)
-            if (file.length() == 0L && report.isNotEmpty()) throw IOException("Downloads/DiPlay did not keep the report")
+            try {
+                temp.writeText(report, Charsets.UTF_8)
+                if (temp.length() != report.toByteArray(Charsets.UTF_8).size.toLong()) {
+                    throw IOException("Downloads/DiPlay did not keep the report")
+                }
+                if (!temp.renameTo(file)) throw IOException("Downloads/DiPlay did not accept the report")
+            } finally {
+                if (temp.exists()) temp.delete()
+            }
         } catch (error: Exception) {
             file.delete()
             throw error

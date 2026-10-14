@@ -476,6 +476,13 @@
     <string name="adb_vehicle_speed_reading">Velocidad del vehículo: %1$d km/h.</string>
     <string name="adb_vehicle_speed_unreadable">No se puede leer la velocidad del vehículo en este firmware.</string>
     <string name="adb_vehicle_gear_reading">Marcha: %1$s.</string>
+    <string name="leapmotor_cluster_mask_left">Máscara del cuadro: fundido izquierdo</string>
+    <string name="leapmotor_cluster_mask_top">Máscara del cuadro: fundido superior</string>
+    <string name="leapmotor_cluster_mask_percent">%1$d %%</string>
+    <string name="leapmotor_cluster_mask_description">Fusiona el mapa proyectado con las agujas que lo rodean, como hacen las herramientas del propio coche. Los anchos se miden sobre el cuadrado de 720 píxeles; 0 %% desactiva un fundido.</string>
+    <string name="leapmotor_cluster_mask_reset">Restablecer anchos de la máscara</string>
+    <string name="adb_battery_reading_percent_only">Batería: %1$d %%.</string>
+    <string name="c11_log_data_waiting">Esperando los registros de la propia unidad principal (la marcha, la batería y la velocidad aparecen cuando el coche los imprime con el acceso ADB listo).</string>
     <string name="adb_vehicle_gear_unreadable">No se puede leer la marcha en este firmware.</string>
     <string name="advanced_vehicle_data">Datos avanzados del vehículo</string>
     <string name="hide_advanced_vehicle_data">Ocultar datos avanzados</string>

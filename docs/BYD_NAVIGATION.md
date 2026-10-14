@@ -107,6 +107,8 @@ On the Tang the console's volume control sends exactly the same codes, scan code
 
 BYD's settings have no accessibility page. The "Turn on the wheel key service · ADB" button adds DiPlay's service to `enabled_accessibility_services` through the head unit's own adbd (the car asks once to allow DiPlay's key) and keeps services already listed. The service only receives key events; it declares no window-content access.
 
+The diagnostic report shows what the service was given. After the `Wheel key service:` line, `Wheel keys since DiPlay started:` counts the presses, how many DiPlay kept and how many it left to the head unit, and up to 40 `Wheel keys:` lines follow with the time, `key <code>/<scan code>`, the input device number and the outcome. A volume key that navigation volume left alone carries the reason. `presses=0` with the service bound means the head unit handles its wheel keys before Android sees them, so DiPlay cannot use them. The lines are kept in memory and start again when DiPlay's process does. A key that writes text is counted (`textKeysNotListed`) and never listed.
+
 ### CarPlay joystick on the steering wheel (optional)
 
 DiPlay already declares a rotary knob for CarPlay's main screen (HID `xcertplay Knob`). Checked with Apple Maps and lists on a Tang: only the knob's turn moves CarPlay's focus (the first turn opens the Maps side panel with search, pinned places and recents), select activates the focused item and back closes the screen; the knob's x/y nudges only pan a focused map, so the joystick does not use them.
