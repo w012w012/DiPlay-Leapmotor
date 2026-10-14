@@ -2,6 +2,8 @@ package com.shilapi.xcertplay
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Canvas
 import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.Gravity
@@ -297,6 +299,23 @@ class LeapmotorC11Test {
         // Narrowing the bands keeps the rounding in proportion, with a floor and a ceiling.
         assertEquals(8f, cornerFilletRadius(6f, 4f))
         assertEquals(72f, cornerFilletRadius(400f, 300f))
+    }
+
+    /**
+     * The frame redraws with every video frame, so the gradients and the corner mask are built once per
+     * size rather than once per frame — creating render objects inside draw calls bypasses the hardware
+     * pipeline's caches. This also exercises the real draw path over a canvas.
+     */
+    @Test fun theFadeBuildsItsShadersOncePerSize() {
+        val frame = ClusterEdgeFadeFrame(app, 27, 10)
+        frame.layout(0, 0, 720, 720)
+        val canvas = Canvas(Bitmap.createBitmap(720, 720, Bitmap.Config.ARGB_8888))
+        frame.draw(canvas)
+        frame.draw(canvas)
+        assertEquals("two frames of the same size reuse the shaders", 1, frame.shaderRebuilds)
+        frame.layout(0, 0, 480, 480)
+        frame.draw(canvas)
+        assertEquals("a resize rebuilds them", 2, frame.shaderRebuilds)
     }
 
     /**

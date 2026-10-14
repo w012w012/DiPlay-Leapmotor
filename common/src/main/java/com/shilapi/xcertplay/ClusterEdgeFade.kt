@@ -83,18 +83,55 @@ internal class ClusterEdgeFadeFrame(
 ) : FrameLayout(context) {
     private val paint = Paint()
 
-    /** The R angle actually in use, 0 when there is no corner to round. */
-    internal fun filletRadius(): Float {
-        val left = leftEdgeFadeRamp(width.toFloat(), leftPercent) ?: return 0f
-        val top = topEdgeFadeRamp(height.toFloat(), topPercent) ?: return 0f
-        return cornerFilletRadius(left.toX, top.toY)
+    private var geometryWidth = -1f
+    private var geometryHeight = -1f
+    private var leftRamp: EdgeFadeRamp? = null
+    private var topRamp: EdgeFadeRamp? = null
+    private var leftShader: Shader? = null
+    private var topShader: Shader? = null
+    private var filletRadiusPixels = 0f
+    private var filletShader: Shader? = null
+
+    /**
+     * How often the gradient and mask objects were built. This frame redraws with every video frame, so
+     * they are built once per size instead of once per frame: creating render objects inside draw calls
+     * bypasses the hardware pipeline's caches (Android's hardware-acceleration guide calls it out under
+     * "Don't create render objects in draw methods"). Visible for the unit test.
+     */
+    internal var shaderRebuilds = 0
+        private set
+
+    private fun prepare(width: Float, height: Float) {
+        if (width == geometryWidth && height == geometryHeight) return
+        geometryWidth = width
+        geometryHeight = height
+        shaderRebuilds++
+        val left = leftEdgeFadeRamp(width, leftPercent)
+        val top = topEdgeFadeRamp(height, topPercent)
+        leftRamp = left
+        topRamp = top
+        leftShader = left?.let { rampShader(it) }
+        topShader = top?.let { rampShader(it) }
+        val fillet = if (left != null && top != null) cornerFilletRadius(left.toX, top.toY) else 0f
+        filletRadiusPixels = fillet
+        filletShader = if (fillet > 0f && left != null && top != null) {
+            RadialGradient(
+                left.toX,
+                top.toY,
+                fillet,
+                Color.argb(255, 0, 0, 0),
+                Color.argb(0, 0, 0, 0),
+                Shader.TileMode.CLAMP,
+            )
+        } else null
     }
 
     override fun dispatchDraw(canvas: Canvas) {
         val width = width.toFloat()
         val height = height.toFloat()
-        val left = leftEdgeFadeRamp(width, leftPercent)
-        val top = topEdgeFadeRamp(height, topPercent)
+        prepare(width, height)
+        val left = leftRamp
+        val top = topRamp
         if (left == null && top == null) {
             super.dispatchDraw(canvas)
             return
@@ -104,34 +141,25 @@ internal class ClusterEdgeFadeFrame(
         val checkpoint = canvas.saveLayer(0f, 0f, width, height, null)
         super.dispatchDraw(canvas)
         // DST_IN keeps the destination and scales its alpha by the source alpha: the video fades
-        // out along the ramp and the panel behind the window shows through.
+        // out along the ramp and the panel behind the window shows through. Android's hardware
+        // acceleration guide lists no limitation for this mode, unlike DARKEN/LIGHTEN/OVERLAY.
         paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
-        left?.let {
-            paint.shader = rampShader(it)
-            canvas.drawRect(0f, 0f, it.toX, height, paint)
+        if (left != null && leftShader != null) {
+            paint.shader = leftShader
+            canvas.drawRect(0f, 0f, left.toX, height, paint)
         }
-        top?.let {
-            paint.shader = rampShader(it)
-            canvas.drawRect(0f, 0f, width, it.toY, paint)
+        if (top != null && topShader != null) {
+            paint.shader = topShader
+            canvas.drawRect(0f, 0f, width, top.toY, paint)
         }
         // The two ramps finish on straight lines, so their corner is a right angle. A radial fade whose
-        // alpha is opaque at that point and runs out at `fillet` takes the tip away: the map's corner
-        // becomes the R angle of a corner instead of a square joint. It decays to nothing at its own
-        // edge, so it never adds a visible boundary, and it stays far inside both bands, so the safe
-        // area declared to the phone is untouched.
-        if (left != null && top != null) {
-            val fillet = cornerFilletRadius(left.toX, top.toY)
-            if (fillet > 0f) {
-                paint.shader = RadialGradient(
-                    left.toX,
-                    top.toY,
-                    fillet,
-                    Color.argb(255, 0, 0, 0),
-                    Color.argb(0, 0, 0, 0),
-                    Shader.TileMode.CLAMP,
-                )
-                canvas.drawCircle(left.toX, top.toY, fillet, paint)
-            }
+        // alpha is opaque at that point and runs out at the fillet's radius takes the tip away: the
+        // map's corner becomes the R angle of a corner instead of a square joint. It decays to nothing
+        // at its own edge, so it never adds a visible boundary, and it stays far inside both bands, so
+        // the safe area declared to the phone is untouched.
+        if (left != null && top != null && filletShader != null) {
+            paint.shader = filletShader
+            canvas.drawCircle(left.toX, top.toY, filletRadiusPixels, paint)
         }
         paint.shader = null
         paint.xfermode = null

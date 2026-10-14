@@ -196,7 +196,10 @@ internal class ClusterMapPresentation(
                             " square=${leap.width}x${leap.height}@${leap.left},${leap.top}" +
                             " window=$leapWindow left=${alphaFadeFrame.leftPercent}%" +
                             " top=${alphaFadeFrame.topPercent}%" +
-                            " corner=${alphaFadeFrame.filletRadius().toInt()}px above=TextureView"
+                            " corner=${cornerFilletRadius(
+                                leap.width * alphaFadeFrame.leftPercent / 100f,
+                                leap.height * alphaFadeFrame.topPercent / 100f,
+                            ).toInt()}px above=TextureView"
                     },
                 )
                 LeapmotorClusterLayout.MASK_MODE_COLOR -> {
