@@ -2157,13 +2157,17 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                             maskSteps,
                             maskLeftPercent,
                         ) { it -> getString(R.string.leapmotor_cluster_mask_percent, it) }
-                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskLeftPercent(this, v) } })
+                            // The fade, its corner radius and the map's usable area are all built when
+                            // the cluster picture starts, so a width change needs a new session.
+                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskLeftPercent(this, v) } }
+                            .also { it.onCommit = { markReconnectNeeded() } })
                         card.addView(overlaySliderRow(
                             getString(R.string.leapmotor_cluster_mask_top),
                             maskSteps,
                             maskTopPercent,
                         ) { it -> getString(R.string.leapmotor_cluster_mask_percent, it) }
-                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskTopPercent(this, v) } })
+                            .also { it.onSave = { v -> AirPlayPersistence.saveClusterMaskTopPercent(this, v) } }
+                            .also { it.onCommit = { markReconnectNeeded() } })
                         card.addView(label(getString(R.string.leapmotor_cluster_mask_description), 14, MUTED))
                         // Only worth a button once the sliders have moved off the measured default.
                         if (maskLeftPercent != LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT ||
@@ -5496,6 +5500,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 " autoYield=${AirPlayPersistence.loadAudioFocusAutoYield(appContext)}" +
                 " mediaChannel=${AirPlayPersistence.loadMediaAudioChannel(appContext)}" +
                 " navigationChannel=${AirPlayPersistence.loadNavigationAudioChannel(appContext)}",
+        )
+        // Where the car's battery would come from, and whether CarPlay has been told about it at all.
+        appendLine(
+            "Vehicle status: source=" + when {
+                LeapmotorClusterLayout.isC11() -> "c11-logcat"
+                com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(appContext) -> "byd-adb"
+                else -> "none"
+            } + " soc=${LeapmotorGearMonitor.socPercent?.toString() ?: "unread"}%",
         )
         appendLine("MTK decoder tuning preference: ${if (AirPlayPersistence.loadMtkDecoderTuning(appContext)) "enabled" else "disabled"}")
         appendLine("CarPlay size: ${com.shilapi.xcertplay.airplay.CarPlaySize.fromWidthMillimeters(AirPlayPersistence.loadWidthPhysicalMm(appContext)).label}")

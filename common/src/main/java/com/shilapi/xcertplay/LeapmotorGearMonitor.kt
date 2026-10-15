@@ -54,6 +54,8 @@ internal object LeapmotorGearMonitor {
     private const val HEARTBEAT_POLLS = 15L
     /** The slowly changing readings get a much wider window, every this many polls. */
     private const val SLOW_POLL_EVERY = 15L
+    /** The event-id census runs this many polls apart (about five minutes) while speed is unknown. */
+    private const val CENSUS_POLLS = 300L
     /**
      * How long a reading stays current. The car prints the battery's XML only when a value in it
      * changes, so without this the settings card would show an old number as the present one.
@@ -250,6 +252,9 @@ internal object LeapmotorGearMonitor {
         // Battery and wheel speed change slowly and the car prints them rarely, so the one-second
         // window above seldom holds them; the same link is read wider every few seconds instead.
         if (pollCount % SLOW_POLL_EVERY == 0L) pollSlowLogcat(context)
+        // Until a speed reading is found, ask the car which event ids it prints: the ids this protocol
+        // looks for came from another firmware, and a report taken after driving still had no match.
+        if (speedKmh == null && pollCount % CENSUS_POLLS == 0L) censusEventIds(context)
         if (matched > 0 || wheel > 0 || pollCount % HEARTBEAT_POLLS == 0L) {
             report(
                 "DiPlay-C11 poll rows=${lines.size} matched=$matched" +
@@ -276,6 +281,21 @@ internal object LeapmotorGearMonitor {
         }
         soc?.let { publishSoc(it, socLine) }
         speed?.let { publishSpeed(it) }
+    }
+
+    /**
+     * Lists the event ids the car prints, so the wheel-speed id can be identified from a real driving
+     * report instead of assumed from another firmware's capture. Runs only while no speed is known.
+     */
+    private fun censusEventIds(context: Context) {
+        val output = runAdb(context, C11LogcatProtocol.censusCommand()) ?: return
+        val rows = C11LogcatProtocol.eventIdCensus(output)
+        if (rows.isEmpty()) {
+            report("DiPlay-C11 event ids: none in the window")
+            return
+        }
+        report("DiPlay-C11 event ids: ${rows.size} listed")
+        rows.forEach { report("DiPlay-C11 event $it") }
     }
 
     /** Publishes the newest SOC reading for the settings page and the CarPlay battery report. */

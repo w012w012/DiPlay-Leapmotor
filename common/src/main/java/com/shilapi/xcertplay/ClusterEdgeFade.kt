@@ -44,6 +44,24 @@ internal fun topEdgeFadeRamp(height: Float, percent: Int): EdgeFadeRamp? {
     return EdgeFadeRamp(fromX = 0f, fromY = 0f, toX = 0f, toY = stop)
 }
 
+/** Where the corner is rounded: the joint of the two band ramps, and how far the fade reaches. */
+internal data class EdgeFadeFillet(val x: Float, val y: Float, val radius: Float)
+
+/**
+ * The R angle's place and size.
+ *
+ * The centre is exactly the joint of the two band ramps — the point the map's clear corner ends at — so
+ * it moves with the width sliders instead of being pinned to the panel; the radius is half the narrower
+ * band. Null when either band is off, because a single band has no corner to round.
+ */
+internal fun edgeFadeFillet(width: Float, height: Float, leftPercent: Int, topPercent: Int): EdgeFadeFillet? {
+    val left = leftEdgeFadeRamp(width, leftPercent) ?: return null
+    val top = topEdgeFadeRamp(height, topPercent) ?: return null
+    val radius = cornerFilletRadius(left.toX, top.toY)
+    if (radius <= 0f) return null
+    return EdgeFadeFillet(left.toX, top.toY, radius)
+}
+
 /**
  * The radius of the rounded corner where the two bands meet, in pixels.
  *
@@ -89,6 +107,8 @@ internal class ClusterEdgeFadeFrame(
     private var topRamp: EdgeFadeRamp? = null
     private var leftShader: Shader? = null
     private var topShader: Shader? = null
+    private var filletX = 0f
+    private var filletY = 0f
     private var filletRadiusPixels = 0f
     private var filletShader: Shader? = null
 
@@ -112,13 +132,15 @@ internal class ClusterEdgeFadeFrame(
         topRamp = top
         leftShader = left?.let { rampShader(it) }
         topShader = top?.let { rampShader(it) }
-        val fillet = if (left != null && top != null) cornerFilletRadius(left.toX, top.toY) else 0f
-        filletRadiusPixels = fillet
-        filletShader = if (fillet > 0f && left != null && top != null) {
+        val fillet = edgeFadeFillet(width, height, leftPercent, topPercent)
+        filletX = fillet?.x ?: 0f
+        filletY = fillet?.y ?: 0f
+        filletRadiusPixels = fillet?.radius ?: 0f
+        filletShader = fillet?.let {
             RadialGradient(
-                left.toX,
-                top.toY,
-                fillet,
+                it.x,
+                it.y,
+                it.radius,
                 // Transparent at the joint, opaque at the fillet's radius: DST_IN then removes the map's
                 // corner tip and leaves everything beyond the radius alone. Reversed, it keeps the tip
                 // and erases a ring around it instead — the transparent circle the car showed.
@@ -126,7 +148,7 @@ internal class ClusterEdgeFadeFrame(
                 Color.argb(255, 0, 0, 0),
                 Shader.TileMode.CLAMP,
             )
-        } else null
+        }
     }
 
     override fun dispatchDraw(canvas: Canvas) {
@@ -168,7 +190,7 @@ internal class ClusterEdgeFadeFrame(
             val clip = canvas.save()
             canvas.clipRect(left.toX, top.toY, width, height)
             paint.shader = filletShader
-            canvas.drawCircle(left.toX, top.toY, filletRadiusPixels, paint)
+            canvas.drawCircle(filletX, filletY, filletRadiusPixels, paint)
             canvas.restoreToCount(clip)
         }
         paint.shader = null

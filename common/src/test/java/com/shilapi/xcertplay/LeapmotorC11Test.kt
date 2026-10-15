@@ -129,6 +129,53 @@ class LeapmotorC11Test {
     }
 
     /**
+     * The R angle sits exactly on the joint of the two band ramps, so it moves with the fade width
+     * sliders instead of staying pinned to the panel.
+     */
+    @Test fun theCornerFollowsTheFadeWidths() {
+        val wide = edgeFadeFillet(720f, 720f, 27, 10)!!
+        assertEquals(194.4f, wide.x, 0.01f)
+        assertEquals(72f, wide.y, 0.01f)
+        assertEquals(36f, wide.radius)
+        val narrow = edgeFadeFillet(720f, 720f, 15, 5)!!
+        assertEquals(108f, narrow.x, 0.01f)
+        assertEquals(36f, narrow.y, 0.01f)
+        assertEquals(18f, narrow.radius)
+        assertNull("one band alone has no corner to round", edgeFadeFillet(720f, 720f, 0, 10))
+    }
+
+    /** The C11's battery reading for CarPlay: the charge level, and no invented range. */
+    @Test fun theC11BatteryReachesCarPlayWithoutARange() {
+        assertNull("no reading, no electric vehicle", leapmotorBatterySnapshot(null))
+        val snapshot = leapmotorBatterySnapshot(35)!!
+        assertEquals(35.0, snapshot.batteryPercent, 0.0)
+        assertNull("the car publishes no range", snapshot.rangeKm)
+        assertNull(snapshot.maxRangeKm)
+        assertFalse(snapshot.rangeWarning)
+        assertEquals("a nonsense reading is clamped, never passed on", 100.0, leapmotorBatterySnapshot(120)!!.batteryPercent, 0.0)
+    }
+
+    /**
+     * The wheel-speed ids this protocol looks for came from another firmware; a report taken after
+     * driving still had no match. The census lists what the car really prints.
+     */
+    @Test fun theEventIdCensusListsWhatTheCarPrints() {
+        val output = """
+            1792020932.690  1484  1803 D C11CarSomeIp: onMessage length=20 eventId: 1110 value: 3
+            1792020933.301  1484  1484 D C11CarSomeIp: eventid: 1402 msg:1
+            1792020933.302  1484  1484 D C11CarSomeIp: eventid: 1402 msg:2
+            1792020934.001  1484  1484 D C11CarSomeIp: eventId==21180, message==42
+            DiPlay-C11 poll rows=1 matched=0
+        """.trimIndent()
+        val rows = C11LogcatProtocol.eventIdCensus(output)
+        assertEquals("the most frequent id comes first", "id=1402 n=2", rows.first().substringBefore(" sample="))
+        assertTrue(rows.any { it.startsWith("id=1110 n=1") })
+        assertTrue("the guessed id is listed too", rows.any { it.startsWith("id=21180 n=1") })
+        assertTrue("DiPlay's own lines are not counted", rows.none { it.contains("DiPlay-C11") })
+        assertTrue(C11LogcatProtocol.censusCommand().contains("event[Ii]d"))
+    }
+
+    /**
      * The size presets are the only lever on how large the route looks: the stream's own size cancels
      * out (720 px window over a 480..600 px stream), so the preset shrinks how much of the fade band
      * stays off-limits instead.

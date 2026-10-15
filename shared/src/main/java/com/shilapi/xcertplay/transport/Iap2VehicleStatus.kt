@@ -6,14 +6,20 @@ import com.shilapi.xcertplay.iap2.wire.Iap2Frame
 import kotlin.math.min
 import kotlin.math.roundToLong
 
-/** One reading of an electric vehicle's range and charge, as CarPlay's VehicleStatusUpdate carries it. */
+/**
+ * One reading of an electric vehicle's range and charge, as CarPlay's VehicleStatusUpdate carries it.
+ *
+ * The range is nullable because not every car publishes one: a head unit that only reports its state of
+ * charge must omit the range parameters rather than send 0 km, which would tell the phone the car can
+ * go nowhere.
+ */
 data class VehicleStatusSnapshot(
-    val rangeKm: Int,
+    val rangeKm: Int?,
     val rangeWarning: Boolean,
     val batteryPercent: Double,
     val currentChargeWh: Long?,
     val maxChargeWh: Long?,
-    val maxRangeKm: Int,
+    val maxRangeKm: Int?,
     val charging: Boolean = false,
 )
 
@@ -74,17 +80,21 @@ object Iap2VehicleStatus {
     }
 
     fun update(status: VehicleStatusSnapshot): Iap2Frame = Iap2Messages.buildRaw(VEHICLE_STATUS_UPDATE) {
-        u16(3, status.rangeKm.coerceIn(0, 0xffff)) // Range, km
-        bool(6, status.rangeWarning) // RangeWarning
-        u16(11, status.rangeKm.coerceIn(0, 0xffff)) // RangeElectric, km
-        bool(15, status.rangeWarning) // RangeWarningElectric
+        // A car that publishes no range sends none of the range parameters; the charge level alone is
+        // still useful to the driver.
+        status.rangeKm?.let { range ->
+            u16(3, range.coerceIn(0, 0xffff)) // Range, km
+            bool(6, status.rangeWarning) // RangeWarning
+            u16(11, range.coerceIn(0, 0xffff)) // RangeElectric, km
+            bool(15, status.rangeWarning) // RangeWarningElectric
+        }
         // Unknown energy is omitted, never represented as an empty battery or a zero capacity.
         if (status.currentChargeWh != null || status.maxChargeWh != null) u32(21, 0L) // MinBatteryCharge, Wh
         status.currentChargeWh?.let { u32(22, it.coerceAtLeast(0)) } // CurrentBatteryCharge, Wh
         status.maxChargeWh?.let { u32(23, it.coerceAtLeast(0)) } // MaxBatteryCharge, Wh
         u32(24, (status.batteryPercent.coerceIn(0.0, 100.0) * 1000).roundToLong()) // DisplayedBatteryPercentage, % x 1000
         bool(25, status.charging) // isCharging
-        u16(30, status.maxRangeKm.coerceIn(0, 0xffff)) // MaxRangeElectric, km
+        status.maxRangeKm?.let { u16(30, it.coerceIn(0, 0xffff)) } // MaxRangeElectric, km
     }
 }
 

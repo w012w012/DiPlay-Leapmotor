@@ -53,6 +53,9 @@ internal object C11LogcatProtocol {
      */
     private val BRIDGE_SPEED = Regex("""eventId==(21180|21181),\s*message==(\d+)""")
 
+    /** Any event id the car prints, whatever its spelling, for the census below. */
+    private val EVENT_ID = Regex("""event[Ii]d[=:\s]+(\d{1,5})""")
+
     /**
      * The poll command. The window is bounded (`-t 2000`), the interesting lines are pulled out on
      * the car (grep), DiPlay's own prints are excluded, and the newest 600 lines win so a burst
@@ -71,6 +74,33 @@ internal object C11LogcatProtocol {
      */
     fun slowPollCommand(): String =
         "logcat -d -t 40000 -v epoch | grep -iE '<Battery|figure|eventId==2118' | tail -n 200"
+
+    /**
+     * Asks the car which event ids it actually prints.
+     *
+     * The wheel-speed ids above came from another firmware's capture, and a report taken after driving
+     * still had no match — the slow poll only ever looked for those two ids, so a car that names its
+     * speed signal differently could never be found. This reads a broad window and lists what is there,
+     * which is how the real id gets identified instead of assumed.
+     */
+    fun censusCommand(): String =
+        "logcat -d -t 4000 -v epoch | grep -iE 'event[Ii]d' | grep -v 'DiPlay-' | tail -n 400"
+
+    /** One line per event id seen, most frequent first, with a trimmed sample of each. */
+    fun eventIdCensus(output: String, limit: Int = 8): List<String> {
+        val counts = LinkedHashMap<String, Int>()
+        val samples = HashMap<String, String>()
+        for (line in output.lineSequence()) {
+            if (line.isBlank()) continue
+            val id = EVENT_ID.find(line)?.groupValues?.get(1) ?: continue
+            counts[id] = (counts[id] ?: 0) + 1
+            samples.putIfAbsent(id, line.trim().take(120))
+        }
+        return counts.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { it.key })
+            .take(limit)
+            .map { (id, count) -> "id=$id n=$count sample=${samples[id]}" }
+    }
 
     /** The gear value in a line: 1=R 2=N 3=D 4=P; null when the line carries no gear. */
     fun gearValue(line: String): Int? {

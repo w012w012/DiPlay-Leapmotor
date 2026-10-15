@@ -185,7 +185,7 @@ class CarPlayHostActivity : ComponentActivity() {
             hardwareVersion = "1.0",
             carPlayUsbInterfaceNumber = 3,
             locationInformationEnabled = locationReportingEnabled,
-            vehicleStatusEnabled = com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this),
+            vehicleStatusEnabled = vehicleStatusWanted(),
             chargingConnectors = com.shilapi.xcertplay.hud.BydOutputSettings.chargingConnectors(this),
             vehicleSpeedEnabled = locationReportingEnabled && com.shilapi.xcertplay.hud.BydOutputSettings.wheelSpeedToIphoneActive(this),
         ),
@@ -1343,6 +1343,17 @@ class CarPlayHostActivity : ComponentActivity() {
         override fun onDisplayRemoved(displayId: Int) = Unit
         override fun onDisplayChanged(displayId: Int) = Unit
     }
+
+    /**
+     * Whether CarPlay may be told about the car's battery.
+     *
+     * BYD cars need the vehicle-data probe to have found their services. The C11 has no such services
+     * and reports its state of charge in the head unit's log, so it is always offered; the
+     * identification drops the electric-vehicle declaration again while no reading is there (see
+     * `withVehicleStatusFrom`), which is what keeps a head unit without ADB from claiming an EV.
+     */
+    private fun vehicleStatusWanted(): Boolean =
+        if (LeapmotorClusterLayout.isC11()) true else com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)
 
     private fun clusterDisplayConfig(): AirPlayDisplayConfig? {
         adbClusterConfigured = false
@@ -5148,8 +5159,9 @@ class CarPlayHostActivity : ComponentActivity() {
             savePairRecord = { record -> AirPlayPersistence.saveLockdownRecord(this, record) },
             clearPairRecord = { AirPlayPersistence.clearLockdownRecord(this) },
             locationProvider = locationProvider,
-            vehicleStatusProvider = if (com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)) {
-                com.shilapi.xcertplay.hud.BydNavigationOutputs.batteryStatus(applicationContext)
+            vehicleStatusProvider = if (vehicleStatusWanted()) {
+                if (LeapmotorClusterLayout.isC11()) LeapmotorVehicleStatus.batteryStatus()
+                else com.shilapi.xcertplay.hud.BydNavigationOutputs.batteryStatus(applicationContext)
             } else {
                 null
             },
