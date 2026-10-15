@@ -15,7 +15,7 @@ val localAuthenticationAssets = providers.environmentVariable("DIPLAY_AUTH_ASSET
  * over it — the two are signed with different certificates. The `-C11.<revision>` suffix keeps the
  * diagnostic report unmistakably a fork build.
  */
-val c11Revision = 17
+val c11Revision = 18
 
 android {
     namespace = "com.shilapi.xcertplay"
@@ -27,7 +27,7 @@ android {
         applicationId = "com.shihab.diplay"
         minSdk = 25
         targetSdk = 37
-        versionCode = 39
+        versionCode = 40
         versionName = "0.2.20-C11.$c11Revision"
 
     }
