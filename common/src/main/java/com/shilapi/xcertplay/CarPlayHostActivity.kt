@@ -4689,8 +4689,9 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun defaultAirPlayIconBytes(): ByteArray =
-        // Shown in CarPlay's app list as the "back to the car" button.
-        resources.openRawResource(R.raw.ic_car_home).use { it.readBytes() }
+        // Shown in CarPlay's app list as the "back to the car" button: this fork ships the car maker's
+        // logo (192 px square, the largest AirPlayIconSizing will pass through untouched).
+        resources.openRawResource(R.raw.leapmotor_logo).use { it.readBytes() }
 
     private fun updateAirPlayIconPreview() {
         val preview = iconPreviewView ?: return

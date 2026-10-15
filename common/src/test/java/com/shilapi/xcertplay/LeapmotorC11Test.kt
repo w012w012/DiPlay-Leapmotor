@@ -129,6 +129,29 @@ class LeapmotorC11Test {
     }
 
     /**
+     * The car button CarPlay shows on its home screen carries the car maker's logo and label. The
+     * packaged icon has to be a square no larger than the icon sizing passes through untouched, or the
+     * iPhone is sent a resized copy (and a huge one can stop it connecting, #567).
+     */
+    @Test fun theCarButtonShipsTheLeapmotorLogoAndLabel() {
+        assertEquals("leapmotor", AirPlayPersistence.DEFAULT_OEM_LABEL)
+        // Resolved by name: this module's R class is not in this test's package.
+        val id = app.resources.getIdentifier("leapmotor_logo", "raw", app.packageName)
+        assertTrue("the packaged icon resource exists", id != 0)
+        val bytes = app.resources.openRawResource(id).use { it.readBytes() }
+        val options = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        android.graphics.BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        assertEquals("the packaged icon is square", options.outWidth, options.outHeight)
+        assertTrue(
+            "the packaged icon must not need resizing: ${options.outWidth}px",
+            options.outWidth in 1..AirPlayIconSizing.MAX_PIXELS,
+        )
+        val (size, fitted) = AirPlayIconSizing.fit(bytes)!!
+        assertEquals("the bytes travel as they are", bytes.size, fitted.size)
+        assertEquals(options.outWidth, size)
+    }
+
+    /**
      * The R angle sits exactly on the joint of the two band ramps, so it moves with the fade width
      * sliders instead of staying pinned to the panel.
      */

@@ -128,7 +128,8 @@ object AirPlayPersistence {
 
     const val DEFAULT_MANUFACTURER = "DiPlay"
     const val DEFAULT_MODEL = "DiPlay"
-    const val DEFAULT_OEM_LABEL = "BYD"
+    /** The label CarPlay prints under the car button; this fork is for Leapmotor head units. */
+    const val DEFAULT_OEM_LABEL = "leapmotor"
     const val DEFAULT_MFI_I2C_PATH = "/dev/i2c-1"
 
     fun loadAmbientDelaySeconds(context: Context): Int =
