@@ -5516,6 +5516,9 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     /** The text of a diagnostic report. It reads the session logs, so call it off the main thread. */
     private fun diagnosticReportText(appContext: Context): String = buildString {
         appendLine("DiPlay ${version()} · private beta diagnostic report")
+        // The version number alone would read as a stock 0.2.20: this line says which fork it is and what
+        // it took from upstream beyond the 0.2.19 base.
+        appendLine("Build: Leapmotor C11 fork · base v0.2.19 + upstream 0.2.20 fixes (media clock trim, audio thread priority, HEVC fallback, crash record)")
         appendLine("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT}")
         appendLine("Head unit: ${Build.MANUFACTURER} ${Build.MODEL}")
         appendLine("Connection: ${if (AirPlayPersistence.loadWirelessEnabled(appContext)) "wireless" else "USB"}")

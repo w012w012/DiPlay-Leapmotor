@@ -7,6 +7,16 @@ plugins {
 val localAuthenticationAssets = providers.environmentVariable("DIPLAY_AUTH_ASSETS_DIR")
     .orNull?.let { file(it).canonicalFile }
 
+/**
+ * This fork's build revision, counted after the upstream base.
+ *
+ * The version name carries upstream's number because the in-app update check compares only the first
+ * `x.y.z` it finds: on `0.2.19` this build kept offering upstream's 0.2.20 APK, which can never install
+ * over it — the two are signed with different certificates. The `-C11.<revision>` suffix keeps the
+ * diagnostic report unmistakably a fork build.
+ */
+val c11Revision = 17
+
 android {
     namespace = "com.shilapi.xcertplay"
     compileSdk {
@@ -17,8 +27,8 @@ android {
         applicationId = "com.shihab.diplay"
         minSdk = 25
         targetSdk = 37
-        versionCode = 38
-        versionName = "0.2.19"
+        versionCode = 39
+        versionName = "0.2.20-C11.$c11Revision"
 
     }
 
