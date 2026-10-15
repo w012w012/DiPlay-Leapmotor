@@ -1,8 +1,9 @@
 name: Android checks
+# Manual only in this fork. GitHub bills Actions minutes for private repositories, and every release is
+# already gated by the full local run (leap\build-release-apk.ps1, same task list), so a push does not
+# need to spend 11-18 minutes of quota. Upstream keeps the push and pull-request triggers.
+# Run it here from the Actions tab, or: gh workflow run android.yml --repo w012w012/DiPlay-Leapmotor
 on:
-  push:
-    branches: [main]
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
