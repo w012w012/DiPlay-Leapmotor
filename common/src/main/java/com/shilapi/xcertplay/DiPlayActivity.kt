@@ -154,6 +154,24 @@ internal object SettingsInformationArchitecture {
     )
 }
 
+/**
+ * Settings a car never uses, so they are hidden instead of left to do nothing.
+ *
+ * The C11 is not a BYD head unit. Its media and custom wheel keys never reach DiPlay (the report shows
+ * `presses=0`), the ambient-light card drives a BYD lighting bus that this car does not have, and the
+ * dashboard wheel controls are the same BYD keys. Hiding a section only changes what is drawn: a value
+ * the driver saved earlier stays in storage.
+ */
+internal val C11_HIDDEN_SETTINGS_SECTIONS = setOf(
+    SettingsSection.WHEEL_KEYS,
+    SettingsSection.NAVIGATION_WHEEL,
+    SettingsSection.AMBIENT_LIGHTING,
+)
+
+/** The sections a head unit hides; a function so a test can pin the answer without a car. */
+internal fun hiddenSettingsSections(c11: Boolean): Set<SettingsSection> =
+    if (c11) C11_HIDDEN_SETTINGS_SECTIONS else emptySet()
+
 /** DiAuto's visual language, with a connection flow for an independent CarPlay receiver. */
 class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private val handler = Handler(Looper.getMainLooper())
@@ -1668,7 +1686,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         sections: Set<SettingsSection>,
     ) {
         val previous = settingsSectionFilter
-        settingsSectionFilter = sections
+        // Sections that cannot apply to this car are dropped from the page the driver is looking at.
+        settingsSectionFilter = sections - hiddenSettingsSections(LeapmotorClusterLayout.isC11())
         try {
             allSettingsSections(content)
         } finally {
@@ -1880,21 +1899,27 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         filteredSection(content, SettingsSection.EXPERIMENTAL_DISPLAY,
             getString(R.string.settings_experimental_display), R.drawable.ic_dp_display) { card ->
-            toggle(card, getString(R.string.settings_harman_fullscreen_experimental),
-                getString(R.string.settings_harman_fullscreen_experimental_description),
-                AirPlayPersistence.loadHarmanFullscreen(this)) { enabled ->
-                AirPlayPersistence.saveHarmanFullscreen(this, enabled)
+            // Harman's side bar and a rotating screen do not exist on the Leapmotor head unit; the other
+            // rows (split screen, side panel) are kept until they are tested on the car.
+            if (!LeapmotorClusterLayout.isC11()) {
+                toggle(card, getString(R.string.settings_harman_fullscreen_experimental),
+                    getString(R.string.settings_harman_fullscreen_experimental_description),
+                    AirPlayPersistence.loadHarmanFullscreen(this)) { enabled ->
+                    AirPlayPersistence.saveHarmanFullscreen(this, enabled)
+                }
             }
             toggle(card, getString(R.string.split_screen_areas), getString(R.string.split_screen_areas_description),
                 SplitScreenSettings.enabled(this)) {
                 SplitScreenSettings.setEnabled(this, it)
                 markReconnectNeeded()
             }
-            toggle(card, getString(R.string.carplay_rotation), getString(R.string.carplay_rotation_description),
-                CarPlayRotation.enabled(this)) {
-                CarPlayRotation.setEnabled(this, it)
-                render()
-                markReconnectNeeded()
+            if (!LeapmotorClusterLayout.isC11()) {
+                toggle(card, getString(R.string.carplay_rotation), getString(R.string.carplay_rotation_description),
+                    CarPlayRotation.enabled(this)) {
+                    CarPlayRotation.setEnabled(this, it)
+                    render()
+                    markReconnectNeeded()
+                }
             }
             toggle(card, getString(R.string.side_panel), getString(R.string.side_panel_description), SidePanelSettings.enabled(this)) {
                 SidePanelSettings.setEnabled(this, it)
@@ -2036,17 +2061,22 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Cluster video does not require a BYD navigation broadcast receiver.
         filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
-            reconnectingToggle(card, getString(R.string.adb_cluster_activity_mode),
-                getString(R.string.adb_cluster_activity_description), AirPlayPersistence.loadAdbClusterEnabled(this)) {
-                AirPlayPersistence.saveAdbClusterEnabled(this, it)
-                ClusterActivityOutput.stopForSettings()
-                render()
-            }
-            reconnectingToggle(card, getString(R.string.platform21_cluster_mode),
-                getString(R.string.platform21_cluster_description), AirPlayPersistence.loadLegacyClusterEnabled(this)) {
-                AirPlayPersistence.saveLegacyClusterEnabled(this, it)
-                ClusterActivityOutput.stopForSettings()
-                render()
+            // Both of these start a BYD virtual-display task: DiLink 4's own, or platform 21's
+            // `fission_bg_xdjaVirtualSurface`. The C11's cluster is a plain HDMI presentation, so neither
+            // route can match and the report shows the ADB route never ran.
+            if (!LeapmotorClusterLayout.isC11()) {
+                reconnectingToggle(card, getString(R.string.adb_cluster_activity_mode),
+                    getString(R.string.adb_cluster_activity_description), AirPlayPersistence.loadAdbClusterEnabled(this)) {
+                    AirPlayPersistence.saveAdbClusterEnabled(this, it)
+                    ClusterActivityOutput.stopForSettings()
+                    render()
+                }
+                reconnectingToggle(card, getString(R.string.platform21_cluster_mode),
+                    getString(R.string.platform21_cluster_description), AirPlayPersistence.loadLegacyClusterEnabled(this)) {
+                    AirPlayPersistence.saveLegacyClusterEnabled(this, it)
+                    ClusterActivityOutput.stopForSettings()
+                    render()
+                }
             }
             val adbCluster = AdbClusterRouter.enabled(this)
             if (adbCluster) {
@@ -4374,7 +4404,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 BydOutputSettings.setLowChargePercent(this, lowCharge[it])
             }
         }
-        if (capabilities == null || capabilities.motionSupported) {
+        // Wheel speed into the iPhone is dead-reckoning data. The C11 prints its speed under an event id
+        // this build has not identified yet (the report's event-id census is looking for it), so the switch
+        // would promise something the car cannot deliver.
+        if (!LeapmotorClusterLayout.isC11() && (capabilities == null || capabilities.motionSupported)) {
             toggle(card, getString(R.string.wheel_speed_for_tunnels),
                 getString(R.string.wheel_speed_for_tunnels_description),
                 BydOutputSettings.wheelSpeedToIphone(this), enabled = !adbSwitchChangePending) {

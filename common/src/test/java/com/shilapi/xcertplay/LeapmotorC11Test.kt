@@ -129,6 +129,21 @@ class LeapmotorC11Test {
     }
 
     /**
+     * Settings the C11 has no use for are hidden rather than left to do nothing: the BYD media and dash
+     * wheel keys, the BYD ambient-light card and the same keys' map/volume controls.
+     */
+    @Test fun theC11HidesTheSettingsItCannotUse() {
+        assertEquals(
+            setOf(SettingsSection.WHEEL_KEYS, SettingsSection.NAVIGATION_WHEEL, SettingsSection.AMBIENT_LIGHTING),
+            hiddenSettingsSections(c11 = true),
+        )
+        assertTrue("every other head unit keeps every section", hiddenSettingsSections(c11 = false).isEmpty())
+        // The hidden sections are real sections of the architecture, not names that no longer exist.
+        val all = SettingsInformationArchitecture.sectionsByCategory.values.flatten().toSet()
+        assertTrue(all.containsAll(C11_HIDDEN_SETTINGS_SECTIONS))
+    }
+
+    /**
      * The car button CarPlay shows on its home screen carries the car maker's logo and label. The
      * packaged icon has to be a square no larger than the icon sizing passes through untouched, or the
      * iPhone is sent a resized copy (and a huge one can stop it connecting, #567).
