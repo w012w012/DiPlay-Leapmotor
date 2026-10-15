@@ -1396,9 +1396,12 @@ class CarPlayHostActivity : ComponentActivity() {
                         scalePercent = scale,
                         markerXPercent = markerX,
                         markerYPercent = markerY,
+                        // The size preset decides how much of each fade band stays off-limits: the
+                        // stream size alone cannot change how large the route looks.
+                        contentInsetPercent = LeapmotorClusterLayout.contentInsetPercent(scale),
                         // Only the band this square's own edges use is off-limits to the map. The
                         // BYD figure (35 % per side) shrank the route to a fraction of the square.
-                        coveredInsets = AirPlayInsets(
+                        fadeInsets = AirPlayInsets(
                             top = AirPlayPersistence.loadClusterMaskTopPercent(this).coerceAtLeast(MIN_COVERED_PERCENT),
                             bottom = 0,
                             left = AirPlayPersistence.loadClusterMaskLeftPercent(this).coerceAtLeast(MIN_COVERED_PERCENT),

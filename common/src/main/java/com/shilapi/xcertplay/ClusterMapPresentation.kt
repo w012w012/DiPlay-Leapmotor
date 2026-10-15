@@ -27,6 +27,7 @@ import android.view.TextureView
 import android.content.res.ColorStateList
 import android.widget.FrameLayout
 import android.widget.ProgressBar
+import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.hud.ClusterTurnGuidance
@@ -235,7 +236,19 @@ internal class ClusterMapPresentation(
             }, FrameLayout.LayoutParams((40 * density).toInt(), (40 * density).toInt(), Gravity.CENTER))
         }
         root.addView(waitingLabel, FrameLayout.LayoutParams(videoParams))
-        turnCardView = ClusterTurnCardView(context).apply { visibility = View.GONE }
+        turnCardView = ClusterTurnCardView(context).apply {
+            visibility = View.GONE
+            // The C11 card is sized against the square's own fade-free strip. The default window is the
+            // BYD cluster's 29 %-wide box, which made the same size percent a much smaller card here.
+            if (leap != null) {
+                windowInsets = AirPlayInsets(
+                    top = AirPlayPersistence.loadClusterMaskTopPercent(context).coerceAtLeast(1),
+                    bottom = 0,
+                    left = AirPlayPersistence.loadClusterMaskLeftPercent(context).coerceAtLeast(1),
+                    right = 0,
+                )
+            }
+        }
         root.addView(turnCardView, FrameLayout.LayoutParams(-1, -1))
         root.addView(ClusterMusicView(context), FrameLayout.LayoutParams(videoParams))
         root.addView(ClusterSpeedometerView(context), FrameLayout.LayoutParams(-1, -1))

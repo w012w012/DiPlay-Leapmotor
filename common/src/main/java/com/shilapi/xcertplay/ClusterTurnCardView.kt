@@ -12,6 +12,7 @@ import java.util.Date
 import java.util.Locale
 import android.view.View
 import androidx.core.content.ContextCompat
+import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
 import com.shilapi.xcertplay.host.R
 import com.shilapi.xcertplay.airplay.ClusterTurnCardOverlay
@@ -31,6 +32,13 @@ internal class ClusterTurnCardView(context: Context) : View(context) {
     private var xPercent = ClusterTurnCardOverlay.DEFAULT_X_PERCENT
     private var yPercent = ClusterTurnCardOverlay.DEFAULT_Y_PERCENT
     private var sizePercent = ClusterTurnCardOverlay.DEFAULT_SIZE_PERCENT
+
+    /**
+     * The part of the panel the card is sized against. The default is the BYD cluster's measured
+     * window; the C11 square passes its own fade-free strip, which is what makes the same size percent
+     * mean the same thing on both.
+     */
+    internal var windowInsets: AirPlayInsets = CarPlayClusterDisplay.SAFE_AREA_PERCENT
 
     private val accent = Color.rgb(10, 132, 255)
     /** Card opacity as percent; 100 keeps the historical fully-opaque look available. */
@@ -127,7 +135,7 @@ internal class ClusterTurnCardView(context: Context) : View(context) {
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val next = guidance ?: return
-        val card = ClusterTurnCardOverlay.card(width, height, xPercent, yPercent, sizePercent)
+        val card = ClusterTurnCardOverlay.card(width, height, xPercent, yPercent, sizePercent, windowInsets)
         val h = card.height.toFloat()
         val w = card.width.toFloat()
 

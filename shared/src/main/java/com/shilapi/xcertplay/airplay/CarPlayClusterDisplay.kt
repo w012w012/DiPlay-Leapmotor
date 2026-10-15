@@ -86,6 +86,8 @@ object CarPlayClusterDisplay {
         markerXPercent: Int? = null,
         markerYPercent: Int? = null,
         baseSafeArea: AirPlayInsets = SAFE_AREA_PERCENT,
+        contentCenterXPercent: Int? = null,
+        contentCenterYPercent: Int? = null,
     ): AirPlayDisplayConfig {
         // Height rounds to a multiple of 8 and width follows it, so the panel's aspect is kept
         // (83 % of 1920x720 gives exactly 1600x600). The cluster scales the stream to the panel.
@@ -101,7 +103,17 @@ object CarPlayClusterDisplay {
             primaryInputDevice = 0,
             features = 0,
             initialUrl = content.url,
-            safeArea = safeArea(width, height, horizontalStep, verticalStep, markerXPercent, markerYPercent, baseSafeArea),
+            safeArea = safeArea(
+                width,
+                height,
+                horizontalStep,
+                verticalStep,
+                markerXPercent,
+                markerYPercent,
+                baseSafeArea,
+                contentCenterXPercent,
+                contentCenterYPercent,
+            ),
             safeAreaDrawOutside = true,
         )
     }
@@ -116,13 +128,20 @@ object CarPlayClusterDisplay {
         markerXPercent: Int? = null,
         markerYPercent: Int? = null,
         baseSafeArea: AirPlayInsets = SAFE_AREA_PERCENT,
+        contentCenterXPercent: Int? = null,
+        contentCenterYPercent: Int? = null,
     ): AirPlayInsets {
         val area = baseSafeArea
-        val (x, y) = if (markerXPercent != null && markerYPercent != null) {
+        val (markerX, markerY) = if (markerXPercent != null && markerYPercent != null) {
             markerXPercent.coerceIn(5, 95).toDouble() to markerYPercent.coerceIn(5, 95).toDouble()
         } else {
             markerPercent(horizontalStep, verticalStep, area)
         }
+        // The map content may be centred away from the marker: on a panel whose own left and top edges
+        // are faded, centring the route on the marker pushes it into the fade. The marker keeps its own
+        // place; only the rectangle the route is fitted into moves.
+        val x = contentCenterXPercent?.coerceIn(5, 95)?.toDouble() ?: markerX
+        val y = contentCenterYPercent?.coerceIn(5, 95)?.toDouble() ?: markerY
         val halfWidth = minOf((100 - area.left - area.right) / 2.0, x, 100 - x)
         val halfHeight = minOf((100 - area.top - area.bottom) / 2.0, y, 100 - y)
         return AirPlayInsets(

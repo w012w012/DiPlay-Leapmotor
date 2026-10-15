@@ -125,32 +125,67 @@ internal object LeapmotorClusterLayout {
     }
 
     /**
+     * How much of each fade band the map keeps clear, in percent of the band, for the driver's size
+     * preset.
+     *
+     * The stream size itself does not change how large the map looks: the square is rendered into a
+     * fixed 720 px window, so the route's size on the panel follows the safe area's *fraction* only.
+     * These values are what makes the size control real — 100 % keeps the route inside the fade-free
+     * part of the square (a 526 px column today), and smaller values let it use part of the faded band,
+     * which is the only way to a bigger map. The car's own report confirms the fraction is what counts:
+     * a 600 px stream at 83 % and a 480 px stream at 67 % both gave the route the same panel width.
+     */
+    fun contentInsetPercent(scalePresetPercent: Int): Int = when (scalePresetPercent) {
+        67 -> 25
+        83 -> 50
+        125 -> 150
+        else -> 100
+    }
+
+    /**
      * The square dashboard stream. The safe area keeps Apple Maps' car marker inside the part of the
      * square the cluster leaves uncovered: the driver's marker sliders move it when that measurement
      * does not fit this firmware.
      *
-     * [coveredInsets] is only the band this square's own edges use — the faded strip, and nothing on
-     * the two sides that abut the panel edge. The BYD cluster's measured area (35 % per side) must not
-     * leak in here: on a 720 px square it left the route a 210 px column and a 426 px row.
+     * [fadeInsets] is only the band this square's own edges use — the faded strip, and nothing on the
+     * two sides that abut the panel edge. The BYD cluster's measured area (35 % per side) must not leak
+     * in here: on a 720 px square it left the route a 210 px column and a 426 px row.
+     *
+     * The route is centred inside whatever the inset leaves, not on the marker: with the left edge
+     * faded, centring on a marker at 50 % pushed the route into the fade and read as an off-centre map.
      */
     fun streamConfig(
         content: CarPlayClusterDisplay.Content,
         scalePercent: Int = DEFAULT_SCALE_PERCENT,
         markerXPercent: Int = DEFAULT_MARKER_X_PERCENT,
         markerYPercent: Int = DEFAULT_MARKER_Y_PERCENT,
-        coveredInsets: AirPlayInsets = AirPlayInsets(
+        contentInsetPercent: Int = 100,
+        fadeInsets: AirPlayInsets = AirPlayInsets(
             top = DEFAULT_MASK_TOP_PERCENT,
             bottom = 0,
             left = DEFAULT_MASK_LEFT_PERCENT,
             right = 0,
         ),
-    ): AirPlayDisplayConfig = CarPlayClusterDisplay.config(
-        widthPixels = STREAM_SIZE,
-        heightPixels = STREAM_SIZE,
-        scalePercent = scalePercent,
-        content = content,
-        markerXPercent = markerXPercent,
-        markerYPercent = markerYPercent,
-        baseSafeArea = coveredInsets,
-    )
+    ): AirPlayDisplayConfig {
+        val inset = contentInsetPercent.coerceIn(0, 200)
+        fun kept(percent: Int) = (percent * inset + 50) / 100
+        val covered = AirPlayInsets(
+            top = kept(fadeInsets.top),
+            bottom = kept(fadeInsets.bottom),
+            left = kept(fadeInsets.left),
+            right = kept(fadeInsets.right),
+        )
+        return CarPlayClusterDisplay.config(
+            widthPixels = STREAM_SIZE,
+            heightPixels = STREAM_SIZE,
+            scalePercent = scalePercent,
+            content = content,
+            markerXPercent = markerXPercent,
+            markerYPercent = markerYPercent,
+            baseSafeArea = covered,
+            // The centre of the strip the map may use, so the route fills it symmetrically.
+            contentCenterXPercent = (covered.left + 100) / 2,
+            contentCenterYPercent = (covered.top + 100) / 2,
+        )
+    }
 }

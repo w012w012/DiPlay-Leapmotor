@@ -119,8 +119,11 @@ internal class ClusterEdgeFadeFrame(
                 left.toX,
                 top.toY,
                 fillet,
-                Color.argb(255, 0, 0, 0),
+                // Transparent at the joint, opaque at the fillet's radius: DST_IN then removes the map's
+                // corner tip and leaves everything beyond the radius alone. Reversed, it keeps the tip
+                // and erases a ring around it instead — the transparent circle the car showed.
                 Color.argb(0, 0, 0, 0),
+                Color.argb(255, 0, 0, 0),
                 Shader.TileMode.CLAMP,
             )
         } else null
@@ -157,9 +160,16 @@ internal class ClusterEdgeFadeFrame(
         // map's corner becomes the R angle of a corner instead of a square joint. It decays to nothing
         // at its own edge, so it never adds a visible boundary, and it stays far inside both bands, so
         // the safe area declared to the phone is untouched.
+        //
+        // Clipped to the map's own side on purpose: unclipped, the same disc also deepens the two bands
+        // next to the corner, which on the car showed up as a distinct circular mark instead of a
+        // rounded corner.
         if (left != null && top != null && filletShader != null) {
+            val clip = canvas.save()
+            canvas.clipRect(left.toX, top.toY, width, height)
             paint.shader = filletShader
             canvas.drawCircle(left.toX, top.toY, filletRadiusPixels, paint)
+            canvas.restoreToCount(clip)
         }
         paint.shader = null
         paint.xfermode = null

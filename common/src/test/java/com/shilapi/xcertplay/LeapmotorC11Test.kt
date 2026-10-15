@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Color
 import android.hardware.display.DisplayManager
 import android.view.Display
 import android.view.Gravity
@@ -12,6 +13,7 @@ import android.view.View
 import android.widget.FrameLayout
 import com.shilapi.xcertplay.airplay.AirPlayInsets
 import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
+import com.shilapi.xcertplay.airplay.ClusterTurnCardOverlay
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -87,13 +89,16 @@ class LeapmotorC11Test {
         assertEquals(30, config.fps)
         assertEquals(CarPlayClusterDisplay.MAP_URL, config.initialUrl)
         // Only the faded band is declared off-limits: 27 % left, 10 % top, nothing on the two edges
-        // that meet the panel.
-        assertEquals(AirPlayInsets(top = 216, bottom = 0, left = 97, right = 97), config.safeArea)
+        // that meet the panel. The route is centred in what is left, so the leftover 3 px sit on the
+        // right rather than being split evenly.
+        assertEquals(AirPlayInsets(top = 72, bottom = 0, left = 190, right = 3), config.safeArea)
     }
 
     /**
-     * The BYD cluster's measured safe area (35 % per side) must not reach the C11 square: on a 720 px
-     * square it left the route a 210x426 column, which reads as a tiny map on the instrument cluster.
+     * The BYD cluster's measured safe area (35 % per side) must not reach the C11 square: it left the
+     * route a 210x426 column of a 720 px square, which reads as a tiny map on the instrument cluster.
+     * The route also no longer follows the marker's height, which used to push it up against the top
+     * edge.
      */
     @Test fun theSquareGivesTheMapFarMoreRoomThanTheBydClusterSafeArea() {
         val c11 = LeapmotorClusterLayout.streamConfig(CarPlayClusterDisplay.Content.MAP).safeArea!!
@@ -107,11 +112,11 @@ class LeapmotorC11Test {
         // What the C11 square declared before this fix, straight from the car's own report.
         val previous = (720 - 255 - 255) * (720 - 111 - 183)
         assertEquals(210 * 426, previous)
-        assertEquals(526 * 504, area(c11))
+        assertEquals(527 * 648, area(c11))
         assertTrue(
             "the C11 square must give the map far more room: ${area(c11)} vs $previous before" +
                 " and ${area(byd)} on the BYD safe area",
-            area(c11) > previous * 2,
+            area(c11) > previous * 3,
         )
     }
 
@@ -119,7 +124,32 @@ class LeapmotorC11Test {
         val centred = LeapmotorClusterLayout.streamConfig(
             CarPlayClusterDisplay.Content.MAP, markerYPercent = 50,
         )
-        assertEquals(AirPlayInsets(top = 36, bottom = 36, left = 97, right = 97), centred.safeArea)
+        // The marker no longer decides where the route sits, only where the car icon is.
+        assertEquals(AirPlayInsets(top = 72, bottom = 0, left = 190, right = 3), centred.safeArea)
+    }
+
+    /**
+     * The size presets are the only lever on how large the route looks: the stream's own size cancels
+     * out (720 px window over a 480..600 px stream), so the preset shrinks how much of the fade band
+     * stays off-limits instead.
+     */
+    @Test fun theSizePresetsTradeTheFadeBandForMapArea() {
+        assertEquals(100, LeapmotorClusterLayout.contentInsetPercent(100))
+        assertEquals(50, LeapmotorClusterLayout.contentInsetPercent(83))
+        assertEquals(25, LeapmotorClusterLayout.contentInsetPercent(67))
+        assertEquals(150, LeapmotorClusterLayout.contentInsetPercent(125))
+        fun content(scale: Int): Int {
+            val safe = LeapmotorClusterLayout.streamConfig(
+                CarPlayClusterDisplay.Content.MAP,
+                scalePercent = scale,
+                contentInsetPercent = LeapmotorClusterLayout.contentInsetPercent(scale),
+            ).safeArea!!
+            return (720 - safe.left - safe.right) * (720 - safe.top - safe.bottom)
+        }
+        val standard = content(100)
+        assertTrue("larger must really be larger: ${content(83)} vs $standard", content(83) > standard)
+        assertTrue("largest must beat larger", content(67) > content(83))
+        assertTrue("smallest must be smallest", content(125) < standard)
     }
 
     @Test fun theC11MeterDisplayIsFoundByPanelGeometry() {
@@ -316,6 +346,53 @@ class LeapmotorC11Test {
         frame.layout(0, 0, 480, 480)
         frame.draw(canvas)
         assertEquals("a resize rebuilds them", 2, frame.shaderRebuilds)
+    }
+
+    /**
+     * The R angle only takes the map's own corner away. Unclipped, the same disc also darkened the two
+     * bands next to the corner, which showed on the car as a distinct circular mark rather than a
+     * rounded corner. Drawn for real, so the alpha values are the ones the cluster would show.
+     */
+    @Test
+    @org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.NATIVE)
+    fun theCornerRoundingDoesNotDarkenTheBands() {
+        val frame = ClusterEdgeFadeFrame(app, 27, 10)
+        frame.addView(
+            View(app).apply { setBackgroundColor(Color.WHITE) },
+            FrameLayout.LayoutParams(720, 720),
+        )
+        val spec = View.MeasureSpec.makeMeasureSpec(720, View.MeasureSpec.EXACTLY)
+        frame.measure(spec, spec)
+        frame.layout(0, 0, 720, 720)
+        val bitmap = Bitmap.createBitmap(720, 720, Bitmap.Config.ARGB_8888)
+        frame.draw(Canvas(bitmap))
+        fun alpha(x: Int, y: Int) = Color.alpha(bitmap.getPixel(x, y))
+        assertEquals("the panel edge is fully transparent", 0, alpha(0, 0))
+        // Inside the top band, left of the joint: the band's own ramp (about 174/194 of full), not the
+        // half of it the unclipped disc used to leave.
+        val band = alpha(174, 71)
+        assertTrue("the band keeps its own ramp: $band", band > 200)
+        assertTrue("the corner tip is rounded away", alpha(196, 74) < 40)
+        assertEquals("the map just beyond the fillet is untouched", 255, alpha(230, 100))
+        assertEquals("the map inside is untouched", 255, alpha(400, 400))
+    }
+
+    /** The custom card is sized against the C11 square, not the BYD cluster's 29 %-wide window. */
+    @Test fun theCustomTurnCardCanGrowOnTheC11Square() {
+        val square = AirPlayInsets(top = 10, bottom = 0, left = 27, right = 0)
+        val at95 = ClusterTurnCardOverlay.card(720, 720, 76, 30, 95, square)
+        assertEquals(498, at95.width)
+        // 200 % is now a choice; the panel caps it, and the card keeps its aspect instead of flattening.
+        assertEquals(200, ClusterTurnCardOverlay.sizePercents.max())
+        val at200 = ClusterTurnCardOverlay.card(720, 720, 76, 30, 200, square)
+        assertEquals(720, at200.width)
+        assertTrue("a bigger card is a taller card too", at200.height > at95.height)
+        // The same percent on the BYD window is a much smaller share of its panel: the window differs.
+        val byd = ClusterTurnCardOverlay.card(1920, 720, 76, 30, 95)
+        assertTrue(
+            "the C11 window must give a bigger card for its panel: ${at95.width}/720 vs ${byd.width}/1920",
+            at95.width * 100 / 720 > byd.width * 100 / 1920,
+        )
     }
 
     /**
