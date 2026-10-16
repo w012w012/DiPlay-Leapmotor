@@ -1,5 +1,7 @@
 # DiPlay next release notes
 
+> **Internal historical draft, not current release instructions.** The released C11 build is `0.2.20-C11.24`; use [its release notes](RELEASE-NOTES-0.2.20-C11.24.md) and [fix24 verification](C11-FIX24-CLEANUP.md). The older fix19–fix24 notes below preserve development history and may mention probes/settings that were later removed.
+
 Changes through DiPlay 0.2.19 are documented in [0.2.19 release notes](RELEASE-NOTES-0.2.19.md). Measured checks are in [VALIDATION.md](VALIDATION.md). Device acceptance and remaining failure families are tracked in [connection reliability validation](CONNECTION_RELIABILITY.md).
 
 ## Leapmotor C11 fork

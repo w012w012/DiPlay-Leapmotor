@@ -1,5 +1,7 @@
 # Build DiPlay
 
+This repository's current release is the Leapmotor C11 adaptation `0.2.20-C11.24`. Select `:mobile` for the main C11 app. Debug builds use a different application ID and omit release-only runtime identity assets; a successful source build alone does not establish vehicle compatibility. See [C11 compatibility](COMPATIBILITY.md).
+
 Use this procedure to build the DiPlay app for an Android head unit.
 Run the commands from the repository root, where `gradlew` and `settings.gradle.kts` are located.
 

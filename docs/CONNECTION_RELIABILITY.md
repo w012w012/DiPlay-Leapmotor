@@ -1,5 +1,7 @@
 # Connection reliability validation
 
+> **Historical base-project validation matrix.** Several reports and vehicle observations below concern older BYD/DiLink and upstream builds. They are not evidence of C11 compatibility or acceptance for `0.2.20-C11.24`; use [C11 compatibility](COMPATIBILITY.md) for the current release boundary.
+
 Android 7.1 / API 25 is the installation minimum. A head unit's firmware, USB driver,
 Bluetooth service, Wi-Fi implementation and video compositor also determine whether
 a CarPlay session can run. Record the actual firmware and failed connection stage;

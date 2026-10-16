@@ -1,67 +1,49 @@
-# DiPlay
+# DiPlay — Leapmotor C11 edition
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [繁體中文](README.zh-TW.md)
 
-**CarPlay for compatible BYD Android head units.** Wired and wireless, with the familiar DiAuto interface. Independent app: `com.shihab.diplay`.
+**This repository adapts DiPlay specifically for the Leapmotor C11 Android head unit.** It is an independent C11-focused fork, not the BYD-oriented upstream release. C11 behavior is selected when the system fingerprint contains `qti/msmnile_gvmq`; other C11 firmware variants and other vehicle models have not been confirmed.
 
-> **BYD support scope:** These projects focus on BYD cars. They may work on other brands, but other brands are unsupported and there are no plans to add support or fix brand-specific incompatibilities.
+Current source version: `0.2.20-C11.24` (versionCode `45`). Application ID: `com.shihab.diplay`; minimum Android version: 7.1 (API 25); target SDK: 37.
 
-[Download & website](https://shihabal3amri.github.io/DiPlay/) · [Release](https://github.com/shihabal3amri/DiPlay/releases/tag/v0.2.19) · [Report a problem](https://github.com/shihabal3amri/DiPlay/issues/new/choose)
+## What this C11 edition includes
 
-![DiPlay home](site/assets/home.png)
+- Wired USB and wireless CarPlay connections using the car hotspot, Wi-Fi Direct, or an existing shared Wi-Fi network.
+- CarPlay navigation video on the C11 instrument display, with adjustable map size and position, edge fading, and turn-guidance and music cards. Saved layout changes apply after reconnecting.
+- C11 steering-wheel media broadcasts for play, pause, and track controls.
+- Optional C11 vehicle-log reading, **off by default**. When enabled, it uses already-authorized network ADB to read gear, battery, speed, and steering events; log-based reverse pause/resume is also available. Core CarPlay does not need ADB.
 
-## 0.2.19 — public preview
+BYD-specific SOME/IP HUD output, ambient-light/music analysis, and BYD vehicle-data paths were removed or disabled for this C11 edition. Old BYD preferences do not enable those features on C11.
 
-Install on the **car**, not the iPhone. No jailbreak, dongle, Mac, account or authentication server is required for use. Core CarPlay does not require ADB; optional dashboard, battery, wheel-speed and parked-video features do. Your head unit must permit APK installation. The APK supports Android 7.1+ (API 25); Android 7.1–8.1 support is not yet confirmed on a vehicle. Wireless supports Wi-Fi Direct, the car’s existing hotspot or Existing Wi-Fi / Same LAN. Android 7.1–9 Wi-Fi Direct uses a firmware-dependent legacy path with generated group credentials and unverified requested frequency; see [Android 9 Wi-Fi Direct](docs/ANDROID9_WIFI_DIRECT.md). Android 10+ verifies its negotiated group frequency.
+## Install and update
 
-- Wired USB and wireless CarPlay with local authentication.
-- BYD HUD navigation with arrows, distance and street names on verified firmware.
-- Car hotspot support, improved audio buffering and saved receive diagnostics.
-- Automatic address discovery, fixed-channel Wi-Fi fallbacks and successful-configuration memory.
-- Icon/text size, resolution and frame rate; applying a display change reconnects CarPlay.
-- Local diagnostic export. Reports are sent only if you choose to share them.
-- Separate installation alongside DiAuto. Run one projection app at a time.
+Install the C11 APK on the Leapmotor C11 head unit, not on the iPhone. Use the [releases for this repository](https://github.com/w012w012/DiPlay-Leapmotor/releases). If there is no suitable published APK, follow the [build guide](docs/BUILD.md). Do not substitute the BYD upstream APK.
 
-This is **not an Apple-certified product**. The APK bundles an experimental accessory identity recovered from public Carlinkit firmware, not a newly provisioned MFi identity for DiPlay. A bundled private key is extractable. Acceptance after future iOS updates, reliability across head units and suitability of that identity for general distribution are unresolved. This release invites community testing; it is not a guarantee of universal compatibility.
+The C11 fork and upstream use the same application ID but different signing certificates. They cannot be installed side by side or directly update one another; uninstalling removes app-private preferences and pairing data.
 
-Earlier releases were tested on the development DiLink5.1 car: live windshield guidance and street names work, Car hotspot now starts CarPlay, and Wi-Fi Direct performance is substantially improved. Audio underrun recovery is improved in 0.2.15; remaining cutouts need current diagnostic reports. The 0.2.16 software Opus microphone fallback was accepted on a BOS Mini A1 head unit (Android 9) with an iPhone 12 on iOS 27. The floating-map test build was installed on the development DiLink 5.1 car; feedback led to the pinch corrections in 0.2.9. Earlier wheel-speed and video contributions were tested on a BYD Tang with DiLink 5.0 and an iPhone 15 Pro on iOS 27; wheel-speed dead reckoning in tunnels remains unverified. Broader head-unit and iOS compatibility is not guaranteed. The HUD firmware scope and cleanup limits are documented in [BYD navigation](docs/BYD_NAVIGATION.md).
+The in-app update checker currently queries the upstream DiPlay GitHub releases, not this C11 fork. It may offer an APK that is unsuitable for this build. Turn off **Background update check** under **Settings → About** and use this repository's C11 release page for updates.
 
-## What’s new in 0.2.19
+## Compatibility and validation
 
-- Wired CarPlay starts several seconds sooner on many head units, starts on iOS 26 when the iPhone first offers a USB mode without CarPlay, and works on Android 7.1–9 head units whose firmware removed the USB permission page (with approved network ADB).
-- Calls, Siri and navigation prompts keep the right timing with the iPhone, and music no longer underruns while CarPlay is in the background.
-- With the DiLink 4 dashboard map on, CarPlay no longer restarts at the first touch; with the status bar kept, it no longer stays scaled down after the reversing camera.
-- DiPlay is available in Japanese, Traditional Chinese is complete, and more Arabic strings are translated.
-- **Settings → Diagnostics → Get the report on a phone** downloads the diagnostic report on a phone, by QR code or a typed address and code; the connection screen shows a tip for each failure.
-- A redesigned settings menu inside CarPlay, and an optional album-artwork card on the dashboard map.
+This is a community-maintained adaptation, not an Apple- or Leapmotor-certified product. The firmware fingerprint check may not match every C11 software release. Automated checks for fix24 are documented in the [cleanup and verification record](docs/C11-FIX24-CLEANUP.md); the release has **not** completed vehicle acceptance. Connection, instrument-map display/fading, audio, steering controls, and long-session behavior still need confirmation on the target C11.
 
-See [0.2.19 release notes](docs/RELEASE-NOTES-0.2.19.md) and [validation](docs/VALIDATION.md) for contribution links and remaining physical tests. General stutter, calls/Siri, decoder and model-specific reports still need current-device evidence. [0.2.18 notes](docs/RELEASE-NOTES-0.2.18.md) remain available as historical guidance.
-
-If a problem remains, reproduce it on **0.2.19**, then use **Settings → Diagnostics → Save diagnostic report**. Android 10+ normally saves to **Downloads/DiPlay**; Android 7.1–9 asks for storage access and saves there too. If unavailable, use **View report** or **Share** from the confirmation, which identifies external/private fallback storage. Review the `.txt` and add it to a matching [existing issue](https://github.com/shihabal3amri/DiPlay/issues), or [create one](https://github.com/shihabal3amri/DiPlay/issues/new/choose). Include vehicle/head-unit model, exact firmware and Android/DiLink, phone/iOS, connection backend, relevant settings, steps and failure time. Reports are shared only when you choose; never post your hotspot password.
+The release uses an experimental accessory identity whose private key can be extracted from the APK. Future iOS acceptance is not guaranteed; the APK is not an Apple-certified product or a security credential.
 
 ## Documentation
 
-[Existing Wi-Fi / Same LAN](docs/EXISTING_WIFI.md) keeps the iPhone and head unit
-on an external router. See the guide for setup, build requirements and the
-BYD DiLink 4.0 / Android 10 clean-install validation result.
-
 - [Install and connect](docs/INSTALL.md)
-- [Compatibility and troubleshooting](docs/COMPATIBILITY.md)
-- [Smooth wireless CarPlay](docs/SMOOTH_WIRELESS.md)
-- [Privacy and diagnostic reports](docs/PRIVACY.md)
-- [Build from source](docs/BUILD.md) — select `mobile` for the main DiPlay app; `maphost` is a map sample.
-- [Validation](docs/VALIDATION.md)
-- [Release notes](CHANGELOG.md)
-- [Credits and licenses](docs/THIRD_PARTY_NOTICES.md)
+- [C11 compatibility and limits](docs/COMPATIBILITY.md)
+- [C11 map size and position](docs/C11-MANUAL-MAP-LAYOUT.md)
+- [C11 fix24 scope and verification](docs/C11-FIX24-CLEANUP.md)
+- [Privacy and diagnostics](docs/PRIVACY.md)
+- [Build from source](docs/BUILD.md)
+- [Current release notes](docs/RELEASE-NOTES-0.2.20-C11.24.md) · [project change history](CHANGELOG.md)
+- [Third-party notices and licenses](docs/THIRD_PARTY_NOTICES.md)
 
-The app and the website source include English, Arabic, Russian, Ukrainian, Spanish, Simplified Chinese, Traditional Chinese (Taiwan), and Japanese. Traditional Chinese uses Taiwan wording; the app also recognizes Hong Kong/Macao and explicit Hant selections without claiming separate regional translations. Choose the app language in Settings; on Android 13+, it stays synchronized with Android’s per-app language setting. See the [Traditional Chinese guide](README.zh-TW.md) for installation, settings, troubleshooting, privacy and build instructions.
+## Report a problem
 
-## Source and credits
+Include the C11 model/year and head-unit firmware, Android version, iPhone/iOS version, connection method, relevant settings, reproduction steps, and approximate failure time. You can export a report from **Settings → Diagnostics → Save diagnostic report**. Review it for personal information before sharing; never include hotspot passwords or authentication files. [Open an issue in this repository](https://github.com/w012w012/DiPlay-Leapmotor/issues).
 
-Based on [xcertplay](https://github.com/shilapi/xcertplay), GPL-3.0. The home/settings UI and website adapt [DiAuto](https://github.com/shihabal3amri/DiAuto), AGPL-3.0; that license is included in `docs/licenses`. Preserve those notices when distributing modifications. CarPlay and its icon belong to Apple Inc.; no Apple or BYD affiliation or endorsement is implied.
+## Source and licenses
 
-This repository starts with a clean public source snapshot. Local research, tester reports and release-signing secrets are excluded. The complete source corresponding to the APK is provided with every release; experimental runtime identity assets are described separately in the build instructions and notices.
-
-## Local release packaging
-
-The release APK intentionally contains the experimental accessory identity. The Git repository and source archive exclude all accessory and Android signing keys; tests generate synthetic identities at runtime. Source/CI builds omit runtime identity assets by default. Local release builds explicitly select an external asset directory. Publishing the APK makes its bundled identity extractable; building locally does not preserve that identity's confidentiality.
+The receiver is based on [xcertplay](https://github.com/shilapi/xcertplay) (GPL-3.0). The settings interface and website are adapted from [DiAuto](https://github.com/shihabal3amri/DiAuto) (AGPL-3.0). Keep the applicable notices and [third-party licenses](docs/THIRD_PARTY_NOTICES.md) when distributing modifications. DiPlay is not affiliated with Apple, Leapmotor, or BYD. CarPlay and its icon belong to Apple Inc.

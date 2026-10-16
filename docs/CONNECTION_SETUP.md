@@ -1,5 +1,7 @@
 # Built-in car hotspot setup
 
+> **Archived test notes (28 September 2026).** These steps refer to DiAuto/DiPlay test APKs and an older BYD-oriented test run. They are not the install guide for the current C11 release. Use [Install and connect](INSTALL.md) for this C11 fork.
+
 DiAuto & DiPlay — Built-in car hotspot test builds
 28 September 2026
 

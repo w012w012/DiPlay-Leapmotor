@@ -1,5 +1,7 @@
 # Hide the BYD call popup
 
+> **Legacy BYD-only reference.** This setting is hidden and its work is guarded on C11 in fix24. Do not follow these steps on the current C11 build; see [C11 fix24 scope](C11-FIX24-CLEANUP.md).
+
 On BYD Android 12L (SDK 32), **Advanced → Advanced media → Hide BYD call popup**
 is an opt-in setting, off by default. It needs classic local ADB at
 `127.0.0.1:5555` and approval of DiPlay's existing ADB key. Use the existing

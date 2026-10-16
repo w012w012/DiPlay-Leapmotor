@@ -1,5 +1,7 @@
 # 繁體中文支援驗證紀錄
 
+> **歷史文件驗證紀錄**：本文件記錄 2026-10-12 的繁體中文與上游基線工作，不是目前 C11 版本的實車驗收。現行 C11 驗證範圍見[C11 fix24 紀錄](C11-FIX24-CLEANUP.md)。
+
 [繁體中文首頁](../README.zh-TW.md) · [完整建置指令](BUILD.zh-TW.md#完整檢查)
 
 日期：2026-10-12。分支：`codex/traditional-chinese-support`。驗證環境：Windows、專案 Gradle wrapper 9.5.0、JDK 25 工具鏈及 Android SDK 37.0。

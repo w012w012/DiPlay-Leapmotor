@@ -1,7 +1,9 @@
+> 上游 xcertplay README 的历史快照。文中的产品与构建说明属于原始项目，不代表当前零跑 C11 分支。
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/shilapi/xcertplay/refs/heads/master/asset/xcertplay_small.png" width="180" height="180" alt="xcertplay icon" />
 <h1><strong><font size="6">xcertplay</font></strong></h1>
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
+  <a href="UPSTREAM-README.md">English</a> | <a href="UPSTREAM-README.zh-CN.md">中文</a>
   <p>xcertplay 是面向 Android 车机的 CarPlay 接收端项目。支持通过 CH341 I2C 桥接到 MFi 芯片，亦可通过板载 I2C 控制器直连，支持 CarPlay 有线和无线连接。</p>
 </div>
 
@@ -95,4 +97,4 @@ $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
 
 ## 许可证
 
-本项目采用 [GNU General Public License v3.0](LICENSE) 许可。
+本项目采用 [GNU General Public License v3.0](../LICENSE) 许可。

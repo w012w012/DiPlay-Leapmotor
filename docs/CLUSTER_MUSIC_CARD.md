@@ -1,6 +1,6 @@
 # Cluster music card (experimental)
 
-Based on v0.2.18; branch `feature/cluster-music-card`.
+> **Historical implementation notes based on v0.2.18.** The branch/settings workflow below is not a current C11 setup guide. The fix24 C11 build retains a music card; see [current C11 scope](C11-FIX24-CLEANUP.md).
 
 Enable the cluster map, then open Settings → Advanced → the dashboard map card →
 Music on cluster (experimental). The feature defaults to off.
@@ -18,8 +18,9 @@ Music on cluster (experimental). The feature defaults to off.
 
 The card reuses iPhone iAP2 Now Playing metadata/artwork already received by DiPlay.
 No new vehicle writes or Ultra negotiation are added. Pending artwork uses a music
-symbol rather than knowingly showing the previous track's cover. No title/artist
-or session disconnect clears the card. Reopening a view does not replay an expired
+symbol rather than knowingly showing the previous track's cover. The card clears
+when both title and artist are absent or the media session disconnects. If artist
+is missing, the current view can use the album name as a subtitle. Reopening a view does not replay an expired
 track. Enabling/changing settings gives a temporary preview of the current track.
 Apps that use changing title text for lyrics may retrigger the temporary card.
 

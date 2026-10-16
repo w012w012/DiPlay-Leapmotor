@@ -1,5 +1,7 @@
 # Experimental DiLink 4 cluster video
 
+> **Legacy BYD/DiLink reference.** This route is unavailable on C11 and its settings are hidden there. These historical testing steps do not establish current C11 support. See [C11 compatibility](COMPATIBILITY.md).
+
 The contributor reported testing this approach on a 2022 BYD Seal with DiLink 4.0 / Android 10. The updated upstream branch still needs a vehicle retest.
 It keeps the main CarPlay stream on the head unit and launches a separate Activity
 for the instrument-cluster stream. Other firmware has not been vehicle-tested.

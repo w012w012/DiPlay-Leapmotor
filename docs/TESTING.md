@@ -1,5 +1,7 @@
 # Test checklist
 
+> **Legacy base-project QA checklist.** Many cases below exercise BYD/DiLink settings and older upstream features that are hidden or unavailable in the current C11 build. This checklist is not a completed C11 acceptance run; see [C11 fix24 verification](C11-FIX24-CLEANUP.md).
+
 Use the [installation guide](INSTALL.md). With the car parked, verify wired and wireless connection, picture, touch and music. Test disconnect/reconnect, then settings Apply/Cancel. Save a diagnostic report after reproducing an issue.
 
 For the USB trailer, software-window video and RFCOMM reliability changes, complete the

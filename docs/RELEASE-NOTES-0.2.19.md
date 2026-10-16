@@ -1,5 +1,7 @@
 # DiPlay 0.2.19 — 2026-10-12
 
+> **Historical upstream release notes.** This BYD/DiLink-oriented release predates the Leapmotor C11 adaptation and does not describe features available in the current C11 build. See [current C11 release notes](RELEASE-NOTES-0.2.20-C11.24.md).
+
 Public preview for compatible BYD Android head units. Android 7.1+ (API 25) remains the minimum; Android 7.1–8.1 still needs vehicle testing. This update makes wired CarPlay start sooner and on more head units, fixes the audio clock for calls, Siri and navigation prompts, fixes CarPlay restarting or shrinking around the DiLink 4 dashboard map and the reversing camera, adds Japanese and completes Traditional Chinese, and lets a phone download the diagnostic report.
 
 ## Highlights

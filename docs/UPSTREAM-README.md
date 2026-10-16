@@ -1,7 +1,9 @@
+> Archived snapshot of the xcertplay upstream README. Its product and build statements describe the original project, not the current Leapmotor C11 fork.
+
 <div align="center">
   <img src="https://raw.githubusercontent.com/shilapi/xcertplay/refs/heads/master/asset/xcertplay_small.png" width="180" height="180" alt="xcertplay icon" />
 <h1><strong><font size="6">xcertplay</font></strong></h1>
-  <a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a>
+  <a href="UPSTREAM-README.md">English</a> | <a href="UPSTREAM-README.zh-CN.md">中文</a>
   <p>An Android head-unit CarPlay receiver. It supports connecting to the MFi chip through a CH341 I2C bridge or directly through the board's I2C controller, and supports both wired and wireless CarPlay connections.</p>
 </div>
 
@@ -114,4 +116,4 @@ providing important reference for the BAA authentication in this project.
 
 ## License
 
-Licensed under the [GNU General Public License v3.0](LICENSE).
+Licensed under the [GNU General Public License v3.0](../LICENSE).

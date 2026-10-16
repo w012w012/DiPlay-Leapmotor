@@ -1,246 +1,33 @@
-# 零跑适配技术说明 / Leapmotor adaptation notes
+# 零跑 C11 适配技术说明
 
-上游：[shihabal3amri/DiPlay](https://github.com/shihabal3amri/DiPlay)（GPL-3.0）。
-本文件描述本仓库**唯一原创的部分**：零跑适配补丁。源文件清单见 [`../README.md`](../README.md)，
-逆向推导过程见 [`LEAPMOTOR-ANALYSIS.md`](LEAPMOTOR-ANALYSIS.md)。
+本文件描述当前 C11 分支的适配边界，版本基准为 0.2.20-C11.24。它不是 0.2.15–0.2.17 的移植操作手册。APK 逆向记录针对旧版样本，请见[历史分析](LEAPMOTOR-ANALYSIS.md)；当前功能范围与验证结果见[C11 fix24 记录](C11-FIX24-CLEANUP.md)。
 
-> Upstream: [shihabal3amri/DiPlay](https://github.com/shihabal3amri/DiPlay) (GPL-3.0).
-> This document covers the **only original part** of this repository: the Leapmotor patches.
+## 车型识别与范围
 
----
+C11 专属路径沿用固件指纹 qti/msmnile_gvmq 判定。识别结果决定是否启用 C11 仪表布局、方向盘广播和可选车辆日志读取；这不是对每个 C11 年款或固件的兼容保证。目标 C11 实车验收尚未完成。
 
-## 1. 会话生命周期挂载（必须先做）
+此分支保留通用 CarPlay 接收、iPhone iAP2 导航与通话状态、媒体和音讯/视频链路、通用 ADB 及 OEM 状态恢复。BYD SOME/IP HUD 输出、BYD 灯光与音乐分析及其专用调试桥已从 fix24 C11 构建移除；与共享状态或恢复流程耦合的 BYD 代码则在 C11 设置和执行入口同时受限。旧偏好不会在 C11 激活这些路径。
 
-零跑的两套监听器都必须跟随 CarPlay 会话生命周期：会话建立才有权接管方控与响应挡位，会话结束必须立刻释放，
-否则会抢走车机收音机的按键，或在没连 iPhone 时误发暂停。
+## 仪表地图与卡片
 
-上游在同一位置挂载硬件媒体键版 `CarPlayMediaKeys`，零跑这套广播版与之对等，因此复用同一组锚点。
-锚点文件：`common/src/main/java/com/shilapi/xcertplay/CarPlayHostActivity.kt`
+C11 仪表输出采用固定的 720×720 投影背景。CarPlay 导航画面通过发送给 iPhone 的安全区域调整大小和中心位置；透明边缘渐隐固定在投影窗口中。设置中的大小、左右位置、上下位置和渐隐选择会保存，重连后生效。此实现不靠平移视频纹理来移动地图，也不保证导航应用接受每个安全区变化。详见[地图大小和位置](C11-MANUAL-MAP-LAYOUT.md)。
 
-- **挂载点**：紧跟 `CarPlayMediaKeys.attach(this, next)`
-- **卸载点 A**：紧跟 `CarPlayMediaKeys.detach(oldController)`，下一行为 `CarPlayBackgroundSession.clear(oldController, keepOwner = true)`
-- **卸载点 B**：紧跟 `CarPlayMediaKeys.detach(oldController)`，下一行为 `CarPlayBackgroundSession.clear(oldController)`
+音乐与转向提示卡绘制在仪表投影界面上，并使用 CarPlay 接收的媒体/导航状态。会话断开或歌曲标题、艺人和专辑均为空时，音乐卡会清除；艺人缺失时视图可用专辑名作为副标题。卡片显示和导航应用布局仍需目标 C11 实车验证。
 
-> ⚠️ 该文件在 v0.2.15 → v0.2.17 之间改动很大（+869 / −99）。**不要用行号对**，用上面的语义锚点。
-> **两处卸载都要改**，漏一处会导致重连后重复按键或暂停后不恢复。
+## 方向盘广播
 
-Android 13+：`LeapmotorMediaKeys` / `LeapmotorGearMonitor` 已按 `RECEIVER_NOT_EXPORTED` 处理 API 33+。
-**不要**改成两参数 `registerReceiver`，某些固件上会被系统拒绝，导致整个方控失效。
+C11 固件以广播动作传入方向盘操作，不走通用 Android KeyEvent 服务。媒体协议会把播放、暂停、上一首、下一首等动作映射到 CarPlay 媒体控制；steerwheelcontrol.media 与 steerwheelcontrol.phone 通道用于媒体和电话操作。监听器随 CarPlay 控制器生命周期挂载和释放，避免断开后继续持有按键处理。该硬件链路在当前版本仍需实车验收。
 
-可选 — 接诊断输出：
+## 可选车辆日志读取
 
-```kotlin
-LeapmotorMediaKeys.onDiagnostic = { line -> diagnosticLog?.append(line) }
-LeapmotorGearMonitor.onDiagnostic = { line -> diagnosticLog?.append(line) }
-```
+C11 的车辆日志读取设置位于进阶设置，默认关闭。关闭时不启动 C11 专用快速、慢速或事件普查 logcat 扫描。显式开启后，应用通过已授权且可达的本机网络 ADB 读取档位、电量、速度和方向盘事件；这些数据可支持倒车暂停和离开倒车后恢复音乐。设置保存后在下一次连接生效。核心 CarPlay 连接不需要 ADB。
 
----
+C11 不依赖 leapmotor.cantoapp.update 广播获取挡位；车辆事件来源是上述可选日志读取。关闭该设置会停止日志驱动的车辆读数和倒车媒体行为，不会关闭地图、被动广播接收、方向盘媒体广播或车机媒体占用心跳。
 
-## 2. 方控（steering-wheel keys）
+## FCE 独立输出
 
-**为什么不能用上游方案**：零跑车机的方向盘按键经 CAN → ICU → 广播转发，第三方 App 收不到任何 `KeyEvent`。
-所以必须接收广播。
+FCE/Coagent T7 集群输出仍是独立的可选路径：实际服务存在时由自己的开关控制，不依赖已在 C11 隐藏的 BYD 导航总开关。服务缺失时不启动无用输出任务。相关属性值仅在有限设备上确认；不能据此推断所有 C11 或其他 FCE 设备兼容，CarPlay 到仪表的完整实车验收仍待完成。BYD 导航指南中的这段技术记录不是通用 C11 兼容声明。
 
-源文件：`common/src/main/java/com/shilapi/xcertplay/LeapmotorMediaKeys.kt`
+## 验证边界
 
-### 2.1 通道清单
-
-| 通道族 | 数量 | 载荷 | 说明 |
-|---|---|---|---|
-| `LeapmotorMediaProtocol.CHANNEL_A` | 31 | 字符串 action / `receiver` 二进制 / `action` extra | 主流 Talking。**一次注册 31 个**，因为不同固件版本用哪个 action 并不确定，属于主动兜底 |
-| `STOCK_HOUSEKEEPING` | 5 | — | 车机收音机/语音助手自用命令，**必须识别并丢弃**，否则会抢走收音机 |
-| `EXTRA_CHANNELS` | 2 | int extra `ICU_MediaSwitch` / `ICU_MediaKey` | 键码走整形 extra，不是文本 |
-| `C11_CHANNEL` | 2 | `keyEventType` + `value` | C11 专属；`keyEventType ∈ {steeringWheel, backRow}`，`value` 1=上一首 / 2=下一首 / 3=播放暂停 |
-
-### 2.2 三种载荷解析
-
-1. **二进制 `receiver` extra**：前两字节是长度前缀，`length = b0*100 + b1`，其后为 UTF-8 JSON
-2. **JSON**：取 `data.action`；`src == "diplay"` 时丢弃（**防回环**——自己发出的写操作不能再被当成按键）；`type` 非 `music` 时丢弃
-3. **int extra**：`ICU_MediaKey == 1` → 播放暂停；`ICU_MediaSwitch` 1 → 上一首，2 → 下一首
-
-### 2.3 去重与分发
-
-- **250 ms 去重窗口**：同一物理键常被多个通道同时投递，窗口内同一映射结果只放行一次
-- 优先级：按键学习捕获 → 已学习的绑定 → `CarPlayMediaButton.forLeapmotorAction()`
-- `controller == null`（无 CarPlay 会话）时**不动作**
-- 本地视频播放器（`CarPlayVideo.onMediaKey`）优先于转发给 iPhone
-
-### 2.4 映射表
-
-追加在 `shared/src/main/java/com/shilapi/xcertplay/airplay/CarPlayMediaButton.kt`：
-
-| 动作串 | CarPlay 键 |
-|---|---|
-| `play` | `PLAY` (1) |
-| `pause` / `stop` | `PAUSE` (2) |
-| `playpause` / `pauseplay` / `toggleplay` / `toggleplaypause` / `play_pause` | `PLAY_PAUSE` (3) |
-| `next` / `nextone` / `nexttrack` | `NEXT` (4) |
-| `prev` / `preone` / `previous` / `previoustrack` | `PREVIOUS` (5) |
-
-> **关键**：`isWheelAction()` 覆盖的范围**故意小于** `forLeapmotorAction()` —— 前者排除 `play` / `pause` / `stop`。
-> 裸的 `play`/`pause`/`stop` 同样来自收音机和语音路径，放行会造成误触。这个不一致必须保留。
-
----
-
-## 3. 投仪表（instrument cluster projection）
-
-源文件：`common/src/main/java/com/shilapi/xcertplay/LeapmotorClusterLayout.kt`
-
-### 3.1 车型识别
-
-```kotlin
-Build.FINGERPRINT.contains("qti/msmnile_gvmq")
-```
-
-`msmnile_gvmq` 是高通 SA8155P 车规平台的板级标识。全 APK 中**仅此一处**使用该指纹，可精确定位。
-
-### 3.2 视口几何
-
-```
-仪表面板          1920 × 720
-CarPlay 仪表流    720 × 720（正方形）
-放置位置          right-aligned → left = 1920 - 720 = 1200，top = 0
-```
-
-零跑 C11 的仪表是一块长条屏，右侧留出一个正方形区域给导航地图。
-
-### 3.3 接入方式（当前采用窄口径改造）
-
-改造集中在 `common/src/main/java/com/shilapi/xcertplay/ClusterMapPresentation.kt` 的 `onCreate`：
-
-```kotlin
-val plan = if (adaptive) DiLink51ClusterLayout.plan(size.x, size.y, theme) else null
-// Leapmotor C11 exposes no measurable DiLink layers, so its square window is derived from
-// the physical panel size instead. It is only ever used when DiLink planning failed.
-val leap = if (plan == null) LeapmotorClusterLayout.plan(size.x, size.y) else null
-```
-
-`videoParams` 改为三分支：
-
-```kotlin
-val videoParams = when {
-    leap != null -> FrameLayout.LayoutParams(leap.width, leap.height, Gravity.TOP or Gravity.LEFT).apply {
-        leftMargin = leap.left; topMargin = leap.top
-    }
-    plan == null -> FrameLayout.LayoutParams(-1, -1)
-    else -> FrameLayout.LayoutParams(plan.width, plan.height, Gravity.TOP or Gravity.LEFT).apply {
-        leftMargin = plan.left; topMargin = plan.top
-    }
-}
-```
-
-**为什么这样够用**：C11 的仪表流本身就是 720×720（方对流方形），不需要 TextureView 的裁剪/缩放变换，
-改动面小一个数量级。BYD 路径（`plan != null`）行为完全不变。
-
-### 3.4 完整改造路线（未采用）
-
-`ClusterMapViewport.kt` 已在仓库里，供把整条渲染链抽象成统一视口时使用。那需要同步修改
-`InstrumentContrastView` 的构造签名（当前接收 `DiLink51ClusterLayout.Plan`），改动面大得多。
-窄口径方案验证通过后再决定是否升级。
-
----
-
-## 4. 挡位联动（gear monitor）
-
-源文件：`common/src/main/java/com/shilapi/xcertplay/LeapmotorGearMonitor.kt`
-
-| 项 | 值 |
-|---|---|
-| 广播 | `leapmotor.cantoapp.update` |
-| CAN 信号 extra | `1010105`（int） |
-| 取值 | `-1` = 未初始化（忽略） / `1` = R / `2` = N / `3` = D |
-| 心跳 | 每秒向 `com.leapmotor.carcanserver` 发 `leapmotor.apptocan.update`，extra `upgradeAsk=upgrade` |
-
-- 进入 R 档：`controller.sendMediaButton(PAUSE)`，让倒车影像与雷达提示音独占音频
-- 退出 R 档：`controller.sendMediaButton(PLAY)`，从原位置恢复播放
-- `pausedByReverse` 标志保证只暂停一次、只恢复一次
-- 心跳用于维持车机对 DiPlay 多媒体占用状态的认知——只有在被认可为当前音源时暂停才被接受，且状态丢失时没有回调
-
----
-
-## 5. 版本差异矩阵
-
-决定升级难度的关键清单（对比 v0.2.15 → v0.2.17）：
-
-| 类 / 文件 | 是否改动 | 影响 |
-|---|---|---|
-| `shared/.../airplay/CarPlayMediaButton.kt` | ✅ 未变 | 直接追加，零风险 |
-| `WheelLearning.kt` (`LearnedWheelKeys`) | — | 上游**不存在**，是零跑分支自身的东西，见下节 |
-| `common/.../ClusterMapPresentation.kt` | ⚠️ +17 / −10 | `plan == null` 判定结构未变，锚点成立 |
-| `common/.../CarPlayHostActivity.kt` | ⚠️ +869 / −99 | 用语义锚点，不要按行号 |
-
-### 关于 `LearnedWheelKeys` 的重要更正
-
-`LearnedWheelKeys`（方控按键自定义学习）**不是上游基类**：
-
-```bash
-git grep -c 'LearnedWheelKeys' v0.2.15 -- '*.kt'   # → 0
-git grep -c 'LearnedWheelKeys' main    -- '*.kt'   # → 0
-```
-
-它是零跑分支自己写的（约 549 行，Capture → 存储 → UI 全套）。闭源构建没有随包发布源码，本仓库暂未提供实现。
-
-好消息是：**方控能用**与**方控能自定义学习**是两件事，可以分开。仓库里的 `LearnedWheelKeys.kt` 是过渡桩，
-四个钩子全部返回"没学过任何键"，保证键一定走通用映射。**补齐真实实现后删除该桩文件即可**，没有其它地方按名依赖它。
-
----
-
-## 6. 实车验证清单
-
-```bash
-# ① 会不会命中零跑投仪表分支
-adb shell getprop ro.build.fingerprint | grep msmnile_gvmq
-
-# ② 方控有没有收到广播（看哪些 action 真被命中）
-adb logcat -s DiPlay-MediaKeys
-
-# ③ 挡位有没有被解析
-adb logcat -s DiPlay-Gear
-```
-
-必须实车确认的四件事（见 README §3）：
-
-1. 指纹是否命中
-2. 38 个 action 里你的固件用哪个
-3. 有没有"一次按键换两首"（重复投递）
-4. HUD 转向指引：依赖上游 BYD SOME/IP（`com.ts.car.someip.*`），零跑上大概率绑定失败 → **应视为不可用**
-
----
-
-## 7. C11 实车修正（基于 2023 款 C11 8155 的诊断报告与 0.2.15-245 版 APK）
-
-上游 v0.2.19 + 本分支补丁在 C11 上仍有四处不成立，已按证据修正。所有数值都可被设置项覆盖，
-不依赖任何单一版本的"正确答案"。
-
-### 7.1 方控：补 `steerwheelcontrol` 通道族
-
-诊断报告显示：按键时车机确实在广播（蓝牙音乐同时有反应），但原补丁的 31 个 action 一个都没命中。
-0.2.15-245 版 APK 注册的是 `com.leapmotor.steerwheelcontrol[.media|.phone]`，
-键码走 int extra `action`：**1 = 上一曲 / 4 = 下一曲 / 7 = 播放暂停**。
-
-- `LeapmotorMediaProtocol.STEERWHEEL_CHANNELS` 三个通道已加入注册
-- `attach()` 现在注册 `ALL_ACTIONS`（含 `ICU2MMICtrl`、`customkey.music.pauseplay` 两个 int-extra 通道）
-- 解析不出来的载荷会带完整 extras 写进诊断报告，便于按实车数据继续修正
-
-### 7.2 投仪表：选屏 + 方形流
-
-诊断报告：`allDisplays=0:内置屏幕 1920x1080, 1:HDMI 屏幕 1920x720, 2:HDMI 屏幕 1920x720`，
-两块 HDMI 屏都在 presentation 类别（flags=11）。选屏顺序：
-
-1. 设置里的手动选择（**仪表屏**，`cluster_display_id`）
-2. 固件属性 `persist.sys.lp.meterDisplayId`（0.2.15-245 版就是这么找的）
-3. 兜底：最后一块 1920×720 的 presentation 屏
-
-流参数：720×720 @ 30fps，safe area 由 marker 滑块驱动（默认 50/65，对应
-`top=255, bottom=39, left=255, right=255`，与 0.2.15-245 版一致）。
-窗口只占方形区域（gravity=END|TOP，透明背景），不动车机自己的仪表渲染；
-若固件拒绝缩放窗口，视频回退到面板坐标（left=1200, top=0）。
-
-### 7.3 诊断接入
-
-`LeapmotorMediaKeys.onDiagnostic` / `LeapmotorGearMonitor.onDiagnostic` 已接到应用日志：
-方控命中、挡位变化、未识别载荷都会出现在"保存诊断报告"的文本里，**不需要 ADB**。
-
-### 7.4 挡位边缘修正
-
-无 CarPlay 会话时进入 R 档不再置位 `pausedByReverse`，避免之后误发一次 PLAY。
+fix24 自动化记录包括 2,680 个单元测试、lint、构建、APK 检查和源码检查。未执行目标车机安装、模拟器/仪器测试或整车性能比较。不要把历史 BYD 或旧 C11 fix19–fix23 的测试结果当作当前版本的实车验收。

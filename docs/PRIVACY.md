@@ -1,17 +1,23 @@
-# Privacy and diagnostics
+# Privacy and diagnostics — Leapmotor C11 edition
 
-DiPlay's product flow uses local authentication and a direct USB/Wi-Fi connection to the iPhone. No account, remote authentication service or automatic diagnostic upload is used. The iPhone's CarPlay apps have their own internet and privacy behavior.
+DiPlay connects locally to the iPhone for CarPlay. It does not require an account or remote authentication service, and it does not upload diagnostic reports automatically. The iPhone's CarPlay apps have their own internet and privacy behavior.
 
-The head unit stores app preferences, paired-device selections, pairing data and bounded diagnostic logs in app storage. Authentication and pairing material are kept out of Android backup. Uninstalling removes app-private data; exported reports in Downloads remain until you delete them.
+## Data stored on the head unit
 
-Diagnostic export is initiated by you. Reports include app/device versions, display settings and negotiation, connection transitions, Wi-Fi band/channel and state, and decoder recovery events. With the optional wheel key service on, they also list the last hardware keys it was given, as key and scan codes with what DiPlay did with each; a key that writes text is counted and never listed, and no input device name is recorded. The exporter filters protocol payloads, credential-bearing lines and common identifiers. Redaction cannot promise to recognize every vendor-specific string: review reports before posting them publicly. A GitHub issue is public.
+The app stores preferences, paired-device selections, pairing data, and bounded diagnostic information in app storage. Android backup excludes authentication and pairing material. Uninstalling removes app-private data; reports that you exported elsewhere remain until you delete them.
 
-On Android 9 and earlier, **Save diagnostic report** asks for storage access and saves to `Download/DiPlay`; if you decline, the fallbacks below apply. When the document picker or Downloads storage is unavailable, reports save under `Android/data/<package>/files/diagnostic-reports/` on primary external storage without requesting storage permission. The confirmation shows the actual TXT file path. The release package is `com.shihab.diplay`; debug builds use `com.shihab.diplay.hudtest`. File managers on newer Android versions may restrict access to `Android/data`; use **View** or **Share** in DiPlay instead. If external storage is also unavailable, reports save in private app storage. Each fallback location retains its newest eight exports, and uninstalling removes them. Sharing grants read access to the selected report only; nothing is sent automatically. On Android 9 and older, other apps with storage permission may be able to read the external reports.
+Diagnostic reports can include app/device versions, display settings, connection transitions, Wi-Fi state, and decoder recovery events. The exporter filters protocol payloads, credentials, and common identifiers, but vendor-specific text may not be recognized. Review a report before sharing it publicly. A GitHub issue is public. Reports are shared only when you choose **Share** or attach them yourself.
 
-Microphone access supports Siri and calls. Bluetooth/Nearby devices and Wi-Fi/Location permissions support discovery and transport. The optional local VPN permission supports the USB link; it does not provide a remote internet VPN.
+On Android 9 and earlier, **Save diagnostic report** may ask for storage access. When Downloads or the document picker is unavailable, the app offers an external or private app-storage fallback; the confirmation identifies the file location. External reports may be readable by other apps with storage permission on older Android versions. Uninstalling removes app-private reports but not files saved in Downloads.
 
-The verified DiLink 5.1 cluster profile optionally uses Android Usage Access to follow theme and mini-map-card visibility. This permission exposes app-activity history. DiPlay filters the results to four stock BYD cluster activities, processes them locally, and logs only inferred cluster theme/visibility changes. Unrelated activity events are not retained or uploaded. Automatic mode is opt-in; disabling it stops these queries. Usage Access can also be revoked as described in [BYD navigation](BYD_NAVIGATION.md#dilink-51-theme-profile).
+## Permissions and optional C11 vehicle logs
 
-DiPlay checks GitHub's public release list for updates once a day and shortly after it opens. The request carries DiPlay's version in its user agent and no other data, and GitHub sees the head unit's IP address. Nothing is downloaded or installed without your tap, and **About** turns the background check off. A downloaded update is verified against its published checksum; on Android 10 and later it is also copied to `Download/DiPlay`.
+Bluetooth/Nearby devices and Wi-Fi/location permissions support device discovery and wireless transport. Microphone access supports Siri and calls. The optional local VPN permission carries the USB network link; it is not a remote internet VPN.
 
-The static website has no analytics script or account. GitHub Pages, GitHub and Telegram apply their own policies when you use those services.
+**C11 vehicle-log reading (experimental)** is off by default. If you enable it, DiPlay uses an already-authorized, reachable network ADB connection to read local vehicle log events for gear, battery, speed, and steering state. These events can support reverse-related music pause/resume. The feature does not grant ADB access by itself. Turn it off to stop this optional reading; reconnect after changing the setting. Core CarPlay does not need this feature or ADB.
+
+## Network requests and updates
+
+The background update checker currently queries the public GitHub Releases list for upstream shihabal3amri/DiPlay, not this C11 fork. GitHub receives the head unit's network request. Nothing is downloaded or installed without your action. Because upstream and C11 builds have different signing certificates, an upstream APK cannot update this fork in place. Disable **Background update check** under **Settings → About** and use the C11 fork's [Releases page](https://github.com/w012w012/DiPlay-Leapmotor/releases).
+
+The static site has no analytics script or account system. GitHub Pages and GitHub apply their own policies when you use those services.

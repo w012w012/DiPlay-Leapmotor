@@ -1,3 +1,12 @@
+# Leapmotor C11 fork — 0.2.20-C11.24
+
+- Publish the C11-focused adaptation with adjustable instrument-map size/position and edge fading, C11 steering-wheel media broadcasts, and music/turn-guidance cards.
+- Keep optional C11 vehicle-log reading off by default; when enabled it uses already-authorized network ADB for gear, battery, speed, and steering events.
+- Remove BYD SOME/IP HUD, ambient-light/music analysis, and dedicated HUD-debug code from this C11 build; hide or guard incompatible BYD preferences without clearing saved settings.
+- Record fix24 automated verification and explicitly leave target-C11 vehicle acceptance pending. See [current release notes](docs/RELEASE-NOTES-0.2.20-C11.24.md) and [fix24 verification](docs/C11-FIX24-CLEANUP.md).
+
+The entries below document the earlier DiPlay base-project history. They are not a statement that those BYD/DiLink features are available in the current C11 build.
+
 # DiPlay 0.2.19 — 2026-10-12
 
 - Start wired CarPlay several seconds sooner by not waiting 2 s on each refused USB network write, ask for CarPlay mode first on iOS 26, grant USB access through approved ADB on Android 7.1–9 head units without a USB permission page, and let Auto-confirm USB permission find the system dialog (#644, #689).

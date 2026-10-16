@@ -1,5 +1,7 @@
 # Platform 21 independent cluster task (experimental)
 
+> **Legacy BYD platform reference.** This integration targets BYD platform 21 and is not a C11 feature or compatibility statement. See [current C11 scope](C11-FIX24-CLEANUP.md).
+
 Adaptation author and source vehicle tester: 寒叙 (@Hanxu4131),
 https://github.com/Hanxu4131/BYD-CarPlay. The source adaptation was field-tested on a
 2023 BYD Tang DM-i Champion Edition / platform-controller 21. This smaller upstream

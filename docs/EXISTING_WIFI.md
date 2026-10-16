@@ -1,5 +1,7 @@
 # Existing Wi-Fi / Same LAN
 
+> The setup steps describe a generic shared-Wi-Fi connection. Device validation later in this document is from older BYD/DiLink hardware and does not establish C11 vehicle acceptance.
+
 Connect the Android receiver and iPhone to the same third-party router or portable
 Wi-Fi in system settings. In DiPlay → Connection setup → Wireless, select
 **Existing Wi-Fi / Same LAN**, enter the exact SSID and WPA2 password, and save.

@@ -1,5 +1,7 @@
 # Smooth wireless CarPlay
 
+> **Historical measurements, not C11 results.** The observations below were collected on the stated BYD Tang/DiLink hardware and older app behavior. Do not use them as a C11 performance guarantee; the current C11 release still needs target-vehicle testing.
+
 The Wi-Fi channel and the size of the picture can affect how smooth wireless CarPlay feels. The numbers below were measured on a 2024 BYD Tang (DiLink 5.0, 2560×1440 screen) with an iPhone on iOS 27, parked, while scrolling the same Apple Music list. Other cars, firmware and phones may behave differently; interference, scanning and decoder limits can also contribute.
 
 This guide describes 0.2.13 channel-policy and rotation behavior. Wi-Fi Direct is available on Android 9+ with suitable firmware. Android 9 uses the legacy group/channel path and cannot verify the negotiated frequency; see [Android 9 limits](ANDROID9_WIFI_DIRECT.md). Android 10+ retains actual-frequency verification. The contributor measurements below describe their specified Tang setup, not every device.

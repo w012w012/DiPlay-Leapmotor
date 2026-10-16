@@ -1,5 +1,7 @@
 # 從原始碼建置 DiPlay
 
+本分支目前版本為零跑 C11 適配版 `0.2.20-C11.24`。主要 C11 應用程式請建置 `:mobile`。Debug 套件使用不同應用程式 ID，且不包含僅供正式發布使用的執行時配件身分素材；建置成功不代表已完成實車相容性驗收。詳見[C11 相容性](COMPATIBILITY.md)。
+
 [繁體中文首頁](../README.zh-TW.md) · [英文建置指南](BUILD.md) · [Android CI](../.github/workflows/android.yml)
 
 以下指令從專案根目錄執行，也就是包含 `gradlew` 與 `settings.gradle.kts` 的目錄。環境版本以本分支的建置設定及 CI 為準。
