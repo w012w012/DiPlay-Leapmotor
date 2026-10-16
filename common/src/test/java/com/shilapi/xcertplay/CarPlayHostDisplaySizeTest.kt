@@ -90,6 +90,67 @@ class CarPlayHostDisplaySizeTest {
         assertEquals(2, keepLogs())
     }
 
+    @Test fun c11MusicKeepsNominalPitchWhileOtherHeadUnitsRetainClockTrim() {
+        val original = android.os.Build.FINGERPRINT
+        try {
+            for ((fingerprint, trimExpected) in listOf(
+                "qti/msmnile_gvmq/msmnile_gvmq:9/PQ1A/test:user/test-keys" to false,
+                "other/headunit/device:9/test" to true,
+            )) {
+                org.robolectric.shadows.ShadowBuild.setFingerprint(fingerprint)
+                val sink = activity.javaClass.getDeclaredMethod("createMediaSink", Int::class.javaPrimitiveType,
+                    Int::class.javaPrimitiveType, Int::class.javaPrimitiveType).apply { isAccessible = true }
+                    .invoke(activity, 1920, 1080, 0) as AndroidMediaSink
+                try {
+                    val format = AudioFormat(AudioCodecKind.LPCM, 48_000, 2, 96, "media")
+                    val renderer = AndroidMediaSink::class.java.getDeclaredMethod("audioRenderer",
+                        AudioStreamId::class.java, AudioFormat::class.java).apply { isAccessible = true }
+                        .invoke(sink, AudioStreamId(102, "media"), format)
+                    val rendererType = renderer.javaClass
+                    rendererType.getDeclaredMethod("createTrack").apply { isAccessible = true }.invoke(renderer)
+                    val track = rendererType.getDeclaredField("track").apply { isAccessible = true }
+                        .get(renderer) as android.media.AudioTrack
+                    try {
+                        val trim = rendererType.getDeclaredField("clockTrim").apply { isAccessible = true }.get(renderer)
+                        if (trimExpected) assertNotNull("other head units retain drift correction", trim)
+                        else assertNull("C11 must not change music pitch with buffer level", trim)
+                        assertEquals(48_000, track.sampleRate)
+                    } finally { track.release() }
+                } finally { sink.close() }
+            }
+        } finally { org.robolectric.shadows.ShadowBuild.setFingerprint(original) }
+    }
+
+    @Test fun c11HostAdvertisesSavedMapLayoutInTheFixedSquareStream() {
+        val original = android.os.Build.FINGERPRINT
+        org.robolectric.shadows.ShadowBuild.setFingerprint("qti/msmnile_gvmq/msmnile_gvmq:9/PQ1A/test:user/test-keys")
+        val id = org.robolectric.shadows.ShadowDisplayManager.addDisplay("w1920dp-h720dp-mdpi", 5)
+        val manager = activity.getSystemService(android.hardware.display.DisplayManager::class.java)
+        shadowOf(manager.getDisplay(id)).setFlags(android.view.Display.FLAG_PRESENTATION)
+        try {
+            AirPlayPersistence.saveClusterMapEnabled(activity, true)
+            AirPlayPersistence.saveClusterDisplayId(activity, id)
+            AirPlayPersistence.saveClusterContent(activity, CarPlayClusterDisplay.Content.MAP)
+            LeapmotorClusterMapLayout.saveSize(activity, 121)
+            LeapmotorClusterMapLayout.saveX(activity, 49)
+            LeapmotorClusterMapLayout.saveY(activity, 50)
+            val config = activity.javaClass.getDeclaredMethod("clusterDisplayConfig").apply { isAccessible = true }
+                .invoke(activity) as AirPlayDisplayConfig
+            assertEquals(720, config.widthPixels)
+            assertEquals(720, config.heightPixels)
+            assertEquals(LeapmotorClusterMapLayout.streamConfig(activity, CarPlayClusterDisplay.Content.MAP).safeArea,
+                config.safeArea)
+            assertTrue(ClusterProjectionState.reportLines().any {
+                it.contains("size=121% center=49%/50%") && it.contains("videoTransform=identity")
+            })
+        } finally {
+            org.robolectric.shadows.ShadowDisplayManager.removeDisplay(id)
+            org.robolectric.shadows.ShadowBuild.setFingerprint(original)
+            AirPlayPersistence.saveClusterMapEnabled(activity, false)
+            ClusterProjectionState.reset()
+        }
+    }
+
     @Test fun aNarrowWindowIsNotTreatedAsScreenRotation() {
         val display = startSession()
         applySize(700, 990)

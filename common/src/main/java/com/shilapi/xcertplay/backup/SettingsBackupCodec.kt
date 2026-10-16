@@ -34,6 +34,7 @@ object SettingsBackupCodec {
         "harman_fullscreen", "safe_area_draw_outside", "main_display_disable_safe_area",
         "adapt_pip_resolution", "auto_start_on_boot", "bt_suspend_during_carplay", "hide_byd_call_popup",
         "bt_suspend_delay_seconds", "location_reporting_enabled", "external_controller", "usb_charging_current",
+        "c11_vehicle_logs_enabled",
     )
 
     /** Families of layout settings with many keys and nothing sensitive in them. */

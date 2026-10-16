@@ -33,4 +33,9 @@ internal class NavigationOutputWorker(name: String, private val clearOutput: () 
         executor.queue.clear()
         executor.execute { runCatching(clearOutput) }
     }
+
+    /** An absent optional receiver must not create a thread just to clear an unused output. */
+    @Synchronized fun clearIfStarted() {
+        if (executor.poolSize > 0) clear()
+    }
 }

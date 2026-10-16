@@ -16,6 +16,9 @@ object BydVehicleCapabilityProbe {
     // One probe at a time: a cancelled automatic re-probe still reading must not push a new one into timeouts.
     @Synchronized
     fun probe(context: Context, persist: Boolean = true): BydVehicleProbeOutcome {
+        check(!com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) {
+            "BYD vehicle-data probing is not available on the C11"
+        }
         val app = context.applicationContext
         LocalAdb(AdbKeys.load(app)).use { adb ->
             val access = BydAdbAccess.state(adb.connect(mayAsk = false))

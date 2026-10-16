@@ -83,12 +83,10 @@ private const val MAX_FILLET_RADIUS = 72f
 /**
  * The C11 projection's left and top edges, faded out by taking alpha away from the video itself.
  *
- * This is the difference from [ClusterEdgeMaskView]: nothing is painted over the map. The frame keeps
- * its children (the square video) in an offscreen layer and multiplies their alpha by a gradient with
- * [PorterDuff.Mode.DST_IN], so the last pixels of the video become fully transparent at the panel edge
- * and the car's own gauges come through. A painted band can only ever approximate the colour around
- * it — which is why LeapTool ships sixteen baked styles — while an alpha fade needs no colour at all
- * and matches the day theme, the night theme and anything the firmware draws.
+ * The frame keeps its children (the square video) in an offscreen layer and multiplies their alpha
+ * by a gradient with [PorterDuff.Mode.DST_IN], so the last pixels become transparent at the panel edge
+ * and the car's own gauges come through. This matches the day theme, the night theme and anything
+ * the firmware draws without choosing a background colour.
  *
  * The catch is the video view: a [android.view.SurfaceView] is composited *under* the window, so
  * nothing the window draws can give it alpha. This frame therefore only works around a
@@ -209,19 +207,9 @@ internal class ClusterEdgeFadeFrame(
     )
 }
 
-/** The blending mode the driver picked, clamped to a known value. */
-internal fun clusterEdgeFadeMode(context: Context): Int = when (AirPlayPersistence.loadClusterMaskMode(context)) {
-    LeapmotorClusterLayout.MASK_MODE_COLOR -> LeapmotorClusterLayout.MASK_MODE_COLOR
-    LeapmotorClusterLayout.MASK_MODE_OFF -> LeapmotorClusterLayout.MASK_MODE_OFF
-    else -> LeapmotorClusterLayout.MASK_MODE_ALPHA
-}
-
-/**
- * The fade frame for the C11's square projection, or null when no fade was asked for. The alpha mode
- * is the only one that needs it; the painted band is attached by [attachClusterEdgeMask] instead.
- */
+/** The fade frame for the C11 square, or null when disabled or both widths are zero. */
 internal fun clusterEdgeFadeFrame(context: Context): ClusterEdgeFadeFrame? {
-    if (clusterEdgeFadeMode(context) != LeapmotorClusterLayout.MASK_MODE_ALPHA) return null
+    if (AirPlayPersistence.loadClusterMaskMode(context) != LeapmotorClusterLayout.MASK_MODE_ALPHA) return null
     val left = AirPlayPersistence.loadClusterMaskLeftPercent(context)
     val top = AirPlayPersistence.loadClusterMaskTopPercent(context)
     if (left <= 0 && top <= 0) return null

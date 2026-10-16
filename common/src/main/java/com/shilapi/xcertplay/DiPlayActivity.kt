@@ -65,11 +65,6 @@ import com.shilapi.xcertplay.hud.BydVehicleField
 import com.shilapi.xcertplay.hud.BydVehicleFieldStore
 import com.shilapi.xcertplay.hud.BydVehicleProbeOutcome
 import com.shilapi.xcertplay.host.R
-import com.shilapi.xcertplay.media.AmbientColorMode
-import com.shilapi.xcertplay.media.AmbientColorSpeed
-import com.shilapi.xcertplay.media.AmbientMusicController
-import com.shilapi.xcertplay.media.AmbientColorSource
-import com.shilapi.xcertplay.media.AmbientMusicSettings
 import com.shilapi.xcertplay.media.MtkDecoderTuning
 import com.shilapi.xcertplay.network.CarHotspotSettings
 import com.shilapi.xcertplay.network.CarHotspotTethering
@@ -112,13 +107,14 @@ internal enum class SettingsSection {
     DISPLAY_AND_PERFORMANCE,
     EXPERIMENTAL_DISPLAY,
     ADVANCED_MEDIA,
-    AMBIENT_LIGHTING,
     CAR_BUTTON,
     AUDIO_ROUTING,
     NAVIGATION_WHEEL,
     LOCATION,
     CLUSTER_MAP,
+    C11_VEHICLE_LOGS,
     BYD_NAVIGATION,
+    FCE_NAVIGATION,
     PERMISSIONS_AND_HELP,
     LANGUAGE,
 }
@@ -137,7 +133,7 @@ internal object SettingsInformationArchitecture {
         ),
         SettingsCategory.DISPLAY to setOf(SettingsSection.DISPLAY_AND_PERFORMANCE),
         SettingsCategory.AUDIO to setOf(SettingsSection.AUDIO_ROUTING),
-        SettingsCategory.NAVIGATION to setOf(SettingsSection.LOCATION, SettingsSection.BYD_NAVIGATION),
+        SettingsCategory.NAVIGATION to setOf(SettingsSection.LOCATION, SettingsSection.BYD_NAVIGATION, SettingsSection.FCE_NAVIGATION),
         SettingsCategory.VEHICLE to setOf(
             SettingsSection.CARPLAY_CONTROLS,
             SettingsSection.WHEEL_KEYS,
@@ -146,10 +142,10 @@ internal object SettingsInformationArchitecture {
         SettingsCategory.DIAGNOSTICS to setOf(SettingsSection.DIAGNOSTICS),
         SettingsCategory.ADVANCED to setOf(
             SettingsSection.CLUSTER_MAP,
+            SettingsSection.C11_VEHICLE_LOGS,
             SettingsSection.EXPERIMENTAL_DISPLAY,
             SettingsSection.ADVANCED_MEDIA,
             SettingsSection.NAVIGATION_WHEEL,
-            SettingsSection.AMBIENT_LIGHTING,
         ),
     )
 }
@@ -157,15 +153,13 @@ internal object SettingsInformationArchitecture {
 /**
  * Settings a car never uses, so they are hidden instead of left to do nothing.
  *
- * The C11 is not a BYD head unit. Its media and custom wheel keys never reach DiPlay (the report shows
- * `presses=0`), the ambient-light card drives a BYD lighting bus that this car does not have, and the
- * dashboard wheel controls are the same BYD keys. Hiding a section only changes what is drawn: a value
- * the driver saved earlier stays in storage.
+ * C11 media buttons use Leapmotor broadcasts. Generic Siri and external-controller controls remain
+ * available, while BYD hardware controls are filtered separately. Stored settings are preserved;
+ * execution guards also prevent an old BYD preference from starting incompatible hardware work.
  */
 internal val C11_HIDDEN_SETTINGS_SECTIONS = setOf(
-    SettingsSection.WHEEL_KEYS,
-    SettingsSection.NAVIGATION_WHEEL,
-    SettingsSection.AMBIENT_LIGHTING,
+    SettingsSection.BYD_ADB,
+    SettingsSection.BYD_NAVIGATION,
 )
 
 /** The sections a head unit hides; a function so a test can pin the answer without a car. */
@@ -186,7 +180,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     private val windowLearningPresses = WheelKeyPresses()
     private val endWindowLearning = Runnable { cancelKeyLearning() }
     private var page = "home"
-    internal var ambientSupportCheck: (Context) -> java.util.concurrent.CompletableFuture<Boolean> = AmbientMusicController::checkSupport
     private var settingsCategory = SettingsCategory.OVERVIEW
     private var connectionSettingsReturnCategory: SettingsCategory? = null
     private var setupStep = SetupGuide.STEP_CAR
@@ -389,7 +382,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         refreshAppearance()
         rememberLaunchAppearance()
         languagePreferenceAtCreate = AppLocale.preference(this)
-        com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext)
+        com.shilapi.xcertplay.hud.BydNavigationOutputs.onAppOpened(applicationContext,
+            preloadVehicleBattery = !LeapmotorClusterLayout.isC11())
         PhoneAudioRoute.attach(applicationContext)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         if (Build.VERSION.SDK_INT >= 28) {
@@ -1358,7 +1352,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         settingsPageTitle(content, getString(R.string.settings_navigation), getString(R.string.settings_navigation_summary))
         renderSections(content, SettingsInformationArchitecture.sectionsByCategory.getValue(SettingsCategory.NAVIGATION))
         // The BYD card is hidden without its receiver; say so instead of leaving a gap.
-        if (!BydOutputSettings.available(this)) {
+        if (!LeapmotorClusterLayout.isC11() && !BydOutputSettings.available(this)) {
             content.addView(label(getString(R.string.settings_byd_navigation_unavailable), 15, MUTED).apply {
                 setPadding(dp(4), 0, dp(4), dp(SETTINGS_BLOCK_GAP_DP))
             })
@@ -1668,6 +1662,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun advancedVehicleDataSettings(content: LinearLayout) {
+        if (LeapmotorClusterLayout.isC11()) return
         section(content, getString(R.string.settings_vehicle), R.drawable.ic_dp_dashboard) { card ->
             card.addView(button(getString(if (bydVehicleAdvancedExpanded)
                 R.string.hide_advanced_vehicle_data else R.string.advanced_vehicle_data), false) {
@@ -1939,7 +1934,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         // Opt-in controls that can cost sound or video on some head units.
         filteredSection(content, SettingsSection.ADVANCED_MEDIA,
             getString(R.string.settings_advanced_media), R.drawable.ic_dp_advanced) { card ->
-            if (Build.VERSION.SDK_INT == 32) {
+            if (LeapmotorClusterLayout.isC11()) bluetoothSuspendControls(card)
+            if (Build.VERSION.SDK_INT == 32 && !LeapmotorClusterLayout.isC11()) {
                 toggle(card, getString(R.string.settings_hide_byd_call_popup),
                     getString(R.string.settings_hide_byd_call_popup_description),
                     AirPlayPersistence.loadHideBydCallPopup(this)) {
@@ -2046,11 +2042,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             getString(R.string.settings_navigation_wheel_volume), R.drawable.ic_dp_audio) { card ->
             navigationWheelControls(card)
         }
-        filteredSection(content, SettingsSection.AMBIENT_LIGHTING, getString(R.string.settings_ambient_title)) { card ->
-            card.addView(button(ambientConfigurationLabel(AmbientMusicSettings.load(this)), false) {
-                showAmbientConfiguration()
-            }, matchButton(0, 60))
-        }
         filteredSection(content, SettingsSection.LOCATION,
             getString(R.string.location), R.drawable.ic_dp_navigation) { card ->
             toggle(card, getString(R.string.report_location_to_iphone),
@@ -2059,6 +2050,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             card.addView(label(getString(R.string.location_reporting_reconnects), 14, MUTED))
         }
         // Cluster video does not require a BYD navigation broadcast receiver.
+        if (LeapmotorClusterLayout.isC11()) {
+            filteredSection(content, SettingsSection.C11_VEHICLE_LOGS,
+                getString(R.string.settings_c11_vehicle_logs_title), R.drawable.ic_dp_dashboard) { card ->
+                c11VehicleLogControls(card)
+            }
+        }
         filteredSection(content, SettingsSection.CLUSTER_MAP,
             getString(R.string.carplay_map_on_instrument_cluster_experimental), R.drawable.ic_dp_dashboard) { card ->
             // Both of these start a BYD virtual-display task: DiLink 4's own, or platform 21's
@@ -2099,7 +2096,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 DiLink4ClusterDisplay.matches(clusterDisplay.name, clusterSize.x, clusterSize.y))
             val clusterMapEnabled = AirPlayPersistence.loadClusterMapEnabled(this)
             reconnectingToggle(card, getString(R.string.carplay_map_on_instrument_cluster_experimental),
-                if (clusterDisplay != null || adbCluster) getString(R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c)
+                if (LeapmotorClusterLayout.isC11()) getString(R.string.settings_c11_cluster_map_description)
+                else if (clusterDisplay != null || adbCluster) getString(R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c)
                 else getString(R.string.shows_the_iphone_s_cluster_map_virtual_stream_description),
                 clusterMapEnabled) {
                 AirPlayPersistence.saveClusterMapEnabled(this, it)
@@ -2166,17 +2164,15 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                         val maskTopPercent = AirPlayPersistence.loadClusterMaskTopPercent(this)
                         val maskModes = listOf(
                             LeapmotorClusterLayout.MASK_MODE_ALPHA,
-                            LeapmotorClusterLayout.MASK_MODE_COLOR,
                             LeapmotorClusterLayout.MASK_MODE_OFF,
                         )
                         val maskModeLabels = listOf(
                             getString(R.string.leapmotor_cluster_mask_mode_alpha),
-                            getString(R.string.leapmotor_cluster_mask_mode_color),
                             getString(R.string.leapmotor_cluster_mask_mode_off),
                         )
                         choice(card, getString(R.string.leapmotor_cluster_mask_mode),
                             maskModeLabels,
-                            maskModes.indexOf(clusterEdgeFadeMode(this)).coerceAtLeast(0),
+                            maskModes.indexOf(AirPlayPersistence.loadClusterMaskMode(this)).coerceAtLeast(0),
                             reconnects = false) { index ->
                             AirPlayPersistence.saveClusterMaskMode(this, maskModes[index])
                             render()
@@ -2208,48 +2204,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                                 render()
                             }, matchButton(10, 56))
                         }
-                        // C11 vehicle data (gear, steering-wheel events) is read from the head
-                        // unit's own logs over the local ADB shell — read-only, approved once
-                        // on the car screen like the other ADB-backed features.
-                        if (c11AdbState == null && !c11AdbCheckInProgress) checkC11AdbState(mayAsk = false)
-                        val c11Adb = c11AdbState
-                        card.addView(label(
-                            when (c11Adb) {
-                                null -> getString(R.string.adb_not_checked)
-                                BydAdbAccess.State.READY -> getString(R.string.adb_access_ready)
-                                BydAdbAccess.State.NOT_APPROVED -> getString(R.string.adb_not_approved)
-                                BydAdbAccess.State.ADB_OFF -> getString(R.string.adb_off)
-                                BydAdbAccess.State.PAIRING_ONLY -> getString(R.string.adb_pairing_only)
-                            },
-                            14,
-                            if (c11Adb == BydAdbAccess.State.READY) MUTED else WARNING,
-                        ))
-                        if (c11AdbCheckInProgress) {
-                            card.addView(label(getString(
-                                if (c11AdbCheckMayAsk) R.string.adb_checking_may_ask else R.string.adb_checking,
-                            ), 14, MUTED))
-                        } else {
-                            card.addView(button(getString(R.string.check_adb_access), false) {
-                                checkC11AdbState(mayAsk = true)
-                            }, matchButton(10, 56))
-                        }
-                        // The C11 has no BYD probe to read: gear, battery and speed come from the
-                        // head unit's own logs, already running above. Show what they see.
-                        val gearNow = LeapmotorGearMonitor.gearName()
-                        val socNow = LeapmotorGearMonitor.batteryReading()
-                        val speedNow = LeapmotorGearMonitor.speedKmh
-                        if (gearNow != null || socNow != null || speedNow != null) {
-                            card.addView(label(
-                                listOf(
-                                    gearNow?.let { getString(R.string.adb_vehicle_gear_reading, it) },
-                                    socNow?.let { getString(R.string.adb_battery_reading_percent_only, it) },
-                                    speedNow?.let { getString(R.string.adb_vehicle_speed_reading, it) },
-                                ).filterNotNull().joinToString("  "),
-                                14, MUTED,
-                            ))
-                        } else {
-                            card.addView(label(getString(R.string.c11_log_data_waiting), 14, MUTED))
-                        }
+
                     }
                     if (DiLink51ClusterLayout.supported() && !adbCluster) {
                         val automatic = DiLink51ClusterLayout.automatic(this)
@@ -2345,14 +2300,17 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                             card.addView(label(getString(R.string.turn_card_overlay_note), 14, MUTED))
                         }
                         val turnCard = officialCardOnly
-                        if (!diLink4) {
+                        val c11MapLayout = LeapmotorClusterLayout.isC11() && !turnCard
+                        if (c11MapLayout) {
+                            c11MapLayoutControls(card)
+                        } else if (!diLink4) {
                             choice(card, getString(if (turnCard) R.string.turn_card_size else R.string.cluster_map_size),
                                 listOf(getString(R.string.cluster_size_standard), getString(R.string.cluster_size_larger), getString(R.string.cluster_size_largest), getString(R.string.cluster_size_smallest)),
                                 sizes.indexOf(AirPlayPersistence.loadClusterMapScalePercent(this)).coerceAtLeast(0)) {
                                 AirPlayPersistence.saveClusterMapScalePercent(this, sizes[it])
                             }
                         }
-                        if (!diLink4 || AirPlayPersistence.loadClusterSafeAreaRect(this) == null) {
+                        if (!c11MapLayout && (!diLink4 || AirPlayPersistence.loadClusterSafeAreaRect(this) == null)) {
                             card.addView(overlaySliderRow(
                                 getString(if (turnCard) R.string.turn_card_horizontal else R.string.car_marker_horizontal),
                                 CarPlayClusterDisplay.markerXPercents,
@@ -2373,92 +2331,94 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                                 render()
                                 markReconnectNeeded()
                             }, matchButton(10, 56))
-                            choice(card, getString(R.string.cluster_small_window_marker), listOf(
-                                getString(R.string.cluster_small_window_off),
-                                getString(R.string.cluster_small_window_on),
-                                getString(R.string.cluster_small_window_auto),
-                            ), AirPlayPersistence.loadClusterSmallWindowMode(this)) {
-                                AirPlayPersistence.saveClusterSmallWindowMode(this, it)
-                                render()
-                                markReconnectNeeded()
-                            }
-                            card.addView(label(getString(R.string.cluster_small_window_marker_description), 14, MUTED).apply {
-                                setPadding(0, dp(8), 0, dp(6))
-                            })
-                            if (AirPlayPersistence.loadClusterSmallWindowMode(this) == 2) {
-                                val adbMode = BydNavigationOutputs.clusterNaviMode()
-                                if (adbMode != null) {
-                                    card.addView(label(getString(R.string.cluster_small_window_adb_ok, adbMode.label), 14, MUTED)
-                                        .apply { setPadding(0, dp(4), 0, dp(4)) })
-                                } else if (!DiLink51ClusterMonitor.hasAccess(this)) {
-                                    card.addView(label(getString(R.string.cluster_small_window_access_missing), 14, WARNING)
-                                        .apply { setPadding(0, dp(4), 0, dp(4)) })
-                                    card.addView(button(getString(R.string.cluster_small_window_grant_access), false) {
-                                        runCatching {
-                                            openSystem(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                            if (!LeapmotorClusterLayout.isC11()) {
+                                choice(card, getString(R.string.cluster_small_window_marker), listOf(
+                                    getString(R.string.cluster_small_window_off),
+                                    getString(R.string.cluster_small_window_on),
+                                    getString(R.string.cluster_small_window_auto),
+                                ), AirPlayPersistence.loadClusterSmallWindowMode(this)) {
+                                    AirPlayPersistence.saveClusterSmallWindowMode(this, it)
+                                    render()
+                                    markReconnectNeeded()
+                                }
+                                card.addView(label(getString(R.string.cluster_small_window_marker_description), 14, MUTED).apply {
+                                    setPadding(0, dp(8), 0, dp(6))
+                                })
+                                if (AirPlayPersistence.loadClusterSmallWindowMode(this) == 2) {
+                                    val adbMode = BydNavigationOutputs.clusterNaviMode()
+                                    if (adbMode != null) {
+                                        card.addView(label(getString(R.string.cluster_small_window_adb_ok, adbMode.label), 14, MUTED)
+                                            .apply { setPadding(0, dp(4), 0, dp(4)) })
+                                    } else if (!DiLink51ClusterMonitor.hasAccess(this)) {
+                                        card.addView(label(getString(R.string.cluster_small_window_access_missing), 14, WARNING)
+                                            .apply { setPadding(0, dp(4), 0, dp(4)) })
+                                        card.addView(button(getString(R.string.cluster_small_window_grant_access), false) {
+                                            runCatching {
+                                                openSystem(Intent(android.provider.Settings.ACTION_USAGE_ACCESS_SETTINGS))
+                                            }
+                                        }, matchButton(6, 56))
+                                    } else {
+                                        card.addView(label(getString(R.string.cluster_small_window_access_ok), 14, MUTED)
+                                            .apply { setPadding(0, dp(4), 0, dp(4)) })
+                                    }
+                                }
+                                if (AirPlayPersistence.loadClusterSmallWindowMode(this) != 0) {
+                                    card.addView(overlaySliderRow(
+                                        getString(R.string.cluster_small_window_horizontal),
+                                        CarPlayClusterDisplay.markerXPercents,
+                                        AirPlayPersistence.loadClusterSmallWindowMarkerXPercent(this),
+                                    ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 50) }
+                                        .also { it.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowMarkerXPercent(this, v) } }
+                                        .also { it.onCommit = { markReconnectNeeded() } })
+                                    card.addView(overlaySliderRow(
+                                        getString(R.string.cluster_small_window_vertical),
+                                        CarPlayClusterDisplay.markerYPercents,
+                                        AirPlayPersistence.loadClusterSmallWindowMarkerYPercent(this),
+                                    ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 45) }
+                                        .also { it.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowMarkerYPercent(this, v) } }
+                                        .also { it.onCommit = { markReconnectNeeded() } })
+                                    if (AirPlayPersistence.loadClusterContent(this) ==
+                                        com.shilapi.xcertplay.airplay.CarPlayClusterDisplay.Content.MAP_WITH_CUSTOM_CARD) {
+                                        choice(card, getString(R.string.cluster_small_window_card_theme), listOf(
+                                            getString(R.string.cluster_small_window_card_theme_follow),
+                                            getString(R.string.turn_card_theme_day),
+                                            getString(R.string.turn_card_theme_night),
+                                        ), AirPlayPersistence.loadClusterSmallWindowCardTheme(this), reconnects = false) {
+                                            AirPlayPersistence.saveClusterSmallWindowCardTheme(this, it)
                                         }
-                                    }, matchButton(6, 56))
-                                } else {
-                                    card.addView(label(getString(R.string.cluster_small_window_access_ok), 14, MUTED)
-                                        .apply { setPadding(0, dp(4), 0, dp(4)) })
-                                }
-                            }
-                            if (AirPlayPersistence.loadClusterSmallWindowMode(this) != 0) {
-                                card.addView(overlaySliderRow(
-                                    getString(R.string.cluster_small_window_horizontal),
-                                    CarPlayClusterDisplay.markerXPercents,
-                                    AirPlayPersistence.loadClusterSmallWindowMarkerXPercent(this),
-                                ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 50) }
-                                    .also { it.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowMarkerXPercent(this, v) } }
-                                    .also { it.onCommit = { markReconnectNeeded() } })
-                                card.addView(overlaySliderRow(
-                                    getString(R.string.cluster_small_window_vertical),
-                                    CarPlayClusterDisplay.markerYPercents,
-                                    AirPlayPersistence.loadClusterSmallWindowMarkerYPercent(this),
-                                ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 45) }
-                                    .also { it.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowMarkerYPercent(this, v) } }
-                                    .also { it.onCommit = { markReconnectNeeded() } })
-                                if (AirPlayPersistence.loadClusterContent(this) ==
-                                    com.shilapi.xcertplay.airplay.CarPlayClusterDisplay.Content.MAP_WITH_CUSTOM_CARD) {
-                                    choice(card, getString(R.string.cluster_small_window_card_theme), listOf(
-                                        getString(R.string.cluster_small_window_card_theme_follow),
-                                        getString(R.string.turn_card_theme_day),
-                                        getString(R.string.turn_card_theme_night),
-                                    ), AirPlayPersistence.loadClusterSmallWindowCardTheme(this), reconnects = false) {
-                                        AirPlayPersistence.saveClusterSmallWindowCardTheme(this, it)
+                                        val smallWindowPlacementPreview = ClusterCardPlacementPreview(this, ClusterCardPlacementPreview.Mode.SMALL).also {
+                                            card.addView(it, LinearLayout.LayoutParams(-1, dp(240)))
+                                        }
+                                        card.addView(overlaySliderRow(
+                                            getString(R.string.cluster_small_window_card_size),
+                                            ClusterTurnCardOverlay.sizePercents,
+                                            AirPlayPersistence.loadClusterSmallWindowCardSizePercent(this),
+                                        ) { it -> getString(R.string.turn_card_overlay_size_option, it) }
+                                            .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardSizePercent(this, v); smallWindowPlacementPreview.invalidate() } })
+                                        card.addView(overlaySliderRow(
+                                            getString(R.string.cluster_small_window_card_horizontal),
+                                            ClusterTurnCardOverlay.smallWindowXPercents,
+                                            AirPlayPersistence.loadClusterSmallWindowCardXPercent(this),
+                                        ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 80) }
+                                            .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardXPercent(this, v); smallWindowPlacementPreview.invalidate() } })
+                                        card.addView(overlaySliderRow(
+                                            getString(R.string.cluster_small_window_card_vertical),
+                                            ClusterTurnCardOverlay.smallWindowYPercents,
+                                            AirPlayPersistence.loadClusterSmallWindowCardYPercent(this),
+                                        ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 25) }
+                                            .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardYPercent(this, v); smallWindowPlacementPreview.invalidate() } })
+                                        card.addView(overlaySliderRow(
+                                            getString(R.string.cluster_small_window_card_opacity),
+                                            ClusterTurnCardOverlay.opacityPercents,
+                                            AirPlayPersistence.loadClusterSmallWindowCardOpacityPercent(this),
+                                        ) { it -> getString(R.string.turn_card_overlay_opacity_option, it) }
+                                            .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardOpacityPercent(this, v) } })
                                     }
-                                    val smallWindowPlacementPreview = ClusterCardPlacementPreview(this, ClusterCardPlacementPreview.Mode.SMALL).also {
-                                        card.addView(it, LinearLayout.LayoutParams(-1, dp(240)))
-                                    }
-                                    card.addView(overlaySliderRow(
-                                        getString(R.string.cluster_small_window_card_size),
-                                        ClusterTurnCardOverlay.sizePercents,
-                                        AirPlayPersistence.loadClusterSmallWindowCardSizePercent(this),
-                                    ) { it -> getString(R.string.turn_card_overlay_size_option, it) }
-                                        .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardSizePercent(this, v); smallWindowPlacementPreview.invalidate() } })
-                                    card.addView(overlaySliderRow(
-                                        getString(R.string.cluster_small_window_card_horizontal),
-                                        ClusterTurnCardOverlay.smallWindowXPercents,
-                                        AirPlayPersistence.loadClusterSmallWindowCardXPercent(this),
-                                    ) { it -> overlayOffsetLabel(it, getString(R.string.marker_left), getString(R.string.marker_right), 80) }
-                                        .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardXPercent(this, v); smallWindowPlacementPreview.invalidate() } })
-                                    card.addView(overlaySliderRow(
-                                        getString(R.string.cluster_small_window_card_vertical),
-                                        ClusterTurnCardOverlay.smallWindowYPercents,
-                                        AirPlayPersistence.loadClusterSmallWindowCardYPercent(this),
-                                    ) { it -> overlayOffsetLabel(it, getString(R.string.marker_up), getString(R.string.marker_down), 25) }
-                                        .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardYPercent(this, v); smallWindowPlacementPreview.invalidate() } })
-                                    card.addView(overlaySliderRow(
-                                        getString(R.string.cluster_small_window_card_opacity),
-                                        ClusterTurnCardOverlay.opacityPercents,
-                                        AirPlayPersistence.loadClusterSmallWindowCardOpacityPercent(this),
-                                    ) { it -> getString(R.string.turn_card_overlay_opacity_option, it) }
-                                        .also { it2 -> it2.onSave = { v -> AirPlayPersistence.saveClusterSmallWindowCardOpacityPercent(this, v) } })
+                                    card.addView(label(getString(R.string.cluster_small_window_hint), 14, MUTED).apply { setPadding(0, dp(10), 0, 0) })
                                 }
-                                card.addView(label(getString(R.string.cluster_small_window_hint), 14, MUTED).apply { setPadding(0, dp(10), 0, 0) })
                             }
                         }
-                        if (!diLink4) {
+                        if (!diLink4 && !LeapmotorClusterLayout.isC11()) {
                             toggle(card, getString(R.string.dashboard_map_only_in_small_and_full_navi),
                                 getString(R.string.dashboard_map_only_in_small_and_full_navi_description),
                                 BydOutputSettings.clusterStreamPause(this)) {
@@ -2472,21 +2432,28 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
         // FCE head units show this card for their cluster's navigation view, which has its own opt-in.
         val bydNavigation = BydOutputSettings.available(this)
-        if (bydNavigation || BydOutputSettings.fceClusterAvailable()) filteredSection(content, SettingsSection.BYD_NAVIGATION,
+        if (bydNavigation) filteredSection(content, SettingsSection.BYD_NAVIGATION,
             getString(R.string.byd_navigation), R.drawable.ic_dp_navigation) { card ->
             toggle(card, getString(R.string.navigation_on_hud_and_instrument_cluster),
                 getString(R.string.show_phone_navigation_arrows_distance_and_street_names_on),
                 com.shilapi.xcertplay.hud.BydOutputSettings.enabled(this)) { com.shilapi.xcertplay.hud.BydOutputSettings.setEnabled(this, it) }
-            if (BydOutputSettings.fceClusterAvailable()) {
-                toggle(card, getString(R.string.settings_fce_cluster_guidance),
-                    getString(R.string.settings_fce_cluster_guidance_description),
-                    BydOutputSettings.fceCluster(this)) { BydOutputSettings.setFceCluster(this, it) }
-            }
             if (BydOutputSettings.standaloneHudAvailable(this)) {
                 toggle(card, getString(R.string.song_on_hud), getString(R.string.song_on_hud_description),
                     BydOutputSettings.hudSong(this)) { BydOutputSettings.setHudSong(this, it) }
             }
             if (bydNavigation) clusterSongSwitch(card)
+        }
+        if (BydOutputSettings.fceClusterAvailable()) filteredSection(content, SettingsSection.FCE_NAVIGATION,
+            getString(R.string.settings_fce_cluster_guidance), R.drawable.ic_dp_navigation) { card ->
+            // Preserve the existing master switch on non-C11 FCE units without a BYD receiver.
+            if (!LeapmotorClusterLayout.isC11() && !bydNavigation) {
+                toggle(card, getString(R.string.navigation_on_hud_and_instrument_cluster),
+                    getString(R.string.show_phone_navigation_arrows_distance_and_street_names_on),
+                    BydOutputSettings.enabled(this)) { BydOutputSettings.setEnabled(this, it) }
+            }
+            toggle(card, getString(R.string.settings_fce_cluster_guidance),
+                getString(R.string.settings_fce_cluster_guidance_description),
+                BydOutputSettings.fceCluster(this)) { BydOutputSettings.setFceCluster(this, it) }
         }
         filteredSection(content, SettingsSection.PERMISSIONS_AND_HELP,
             getString(R.string.permissions_and_connection_help), R.drawable.ic_dp_permissions) { card ->
@@ -3096,7 +3063,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             LinearLayout.LayoutParams(0, dp(60), 1f))
         footer.addView(space(16), LinearLayout.LayoutParams(dp(16), 1))
         footer.addView(button(getString(R.string.setup_next), true) {
-            if (step == SetupGuide.STEP_CAR && SetupGuide.applyFirstSetupDefaults(this,
+            if (step == SetupGuide.STEP_CAR && !LeapmotorClusterLayout.isC11() && SetupGuide.applyFirstSetupDefaults(this,
                     DiLinkGeneration.confirmed(this) ?: DiLinkGeneration.detect().generation,
                     phoneChosen = DiPlayPreferences.phoneAddress(this) != null)) markReconnectNeeded()
             setupStep = step + 1; render()
@@ -3111,6 +3078,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun setupCarStep(content: LinearLayout) {
+        if (LeapmotorClusterLayout.isC11()) {
+            setupTitle(content, R.string.setup_car_title, getString(R.string.settings_setup_c11_car_description))
+            return
+        }
         val detection = DiLinkGeneration.detect()
         val selected = DiLinkGeneration.confirmed(this) ?: detection.generation
         setupTitle(content, R.string.setup_car_title, when (detection.source) {
@@ -3162,8 +3133,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
 
     private fun setupFeaturesStep(content: LinearLayout) {
         val generation = DiLinkGeneration.current(this)
-        setupTitle(content, R.string.setup_features_title, getString(R.string.setup_features_description,
-            dilinkLabel(generation)))
+        val c11 = LeapmotorClusterLayout.isC11()
+        setupTitle(content, R.string.setup_features_title, if (c11)
+            getString(R.string.settings_setup_c11_features_description)
+        else getString(R.string.setup_features_description, dilinkLabel(generation)))
         if (SetupGuide.hasConflictingClusterRoute(generation, AirPlayPersistence.loadAdbClusterEnabled(this))) {
             val warning = card()
             warning.addView(label(getString(R.string.setup_cluster_route_conflict), 16, WARNING))
@@ -3176,7 +3149,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
             content.addView(warning, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(SETTINGS_BLOCK_GAP_DP) })
         }
         val card = card()
-        SetupGuide.features(generation).forEach { entry ->
+        SetupGuide.features(generation, c11 = c11).forEach { entry ->
             val before = card.childCount
             when (entry.feature) {
                 SetupGuide.Feature.AUTO_CONNECT -> toggle(card, getString(R.string.connect_when_diplay_opens),
@@ -3188,7 +3161,8 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     AirPlayPersistence.loadLocationReportingEnabled(this), save = ::onLocationReportingChanged)
                 SetupGuide.Feature.CLUSTER_MAP -> reconnectingToggle(card,
                     getString(R.string.carplay_map_on_instrument_cluster_experimental),
-                    getString(R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c),
+                    getString(if (c11) R.string.settings_c11_cluster_map_description
+                        else R.string.shows_the_iphone_s_cluster_map_on_the_instrument_cluster_c),
                     AirPlayPersistence.loadClusterMapEnabled(this)) {
                     AirPlayPersistence.saveClusterMapEnabled(this, it)
                     render()
@@ -3605,6 +3579,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun clusterSpeedometerControls(card: LinearLayout) {
+        if (LeapmotorClusterLayout.isC11()) return
         toggle(card, getString(R.string.settings_cluster_speedometer),
             getString(R.string.settings_cluster_speedometer_description), AirPlayPersistence.loadClusterSpeedometerEnabled(this)) {
             AirPlayPersistence.saveClusterSpeedometerEnabled(this, it)
@@ -3642,7 +3617,128 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         }
     }
 
-    /** A 1%-step slider row for overlay placement; every step saves, so the card moves live. */
+    private fun c11VehicleLogControls(card: LinearLayout) {
+        val enabled = AirPlayPersistence.loadC11VehicleLogsEnabled(this)
+        toggle(card, getString(R.string.settings_c11_vehicle_logs_enabled),
+            getString(R.string.settings_c11_vehicle_logs_description), enabled) {
+            AirPlayPersistence.saveC11VehicleLogsEnabled(this, it)
+            render()
+            markReconnectNeeded()
+        }
+        if (!enabled) return
+        // C11 vehicle data (gear, battery and speed) is read from the head
+        // unit's own logs over the local ADB shell — read-only, approved once
+        // on the car screen like the other ADB-backed features.
+        if (c11AdbState == null && !c11AdbCheckInProgress) checkC11AdbState(mayAsk = false)
+        val c11Adb = c11AdbState
+        card.addView(label(
+            when (c11Adb) {
+                null -> getString(R.string.adb_not_checked)
+                BydAdbAccess.State.READY -> getString(R.string.adb_access_ready)
+                BydAdbAccess.State.NOT_APPROVED -> getString(R.string.adb_not_approved)
+                BydAdbAccess.State.ADB_OFF -> getString(R.string.adb_off)
+                BydAdbAccess.State.PAIRING_ONLY -> getString(R.string.adb_pairing_only)
+            },
+            14,
+            if (c11Adb == BydAdbAccess.State.READY) MUTED else WARNING,
+        ))
+        if (c11AdbCheckInProgress) {
+            card.addView(label(getString(
+                if (c11AdbCheckMayAsk) R.string.adb_checking_may_ask else R.string.adb_checking,
+            ), 14, MUTED))
+        } else {
+            card.addView(button(getString(R.string.check_adb_access), false) {
+                checkC11AdbState(mayAsk = true)
+            }, matchButton(10, 56))
+        }
+        // The C11 has no BYD probe to read: gear, battery and speed come from the
+        // head unit's own logs, already running above. Show what they see.
+        val gearNow = LeapmotorGearMonitor.gearName()
+        val socNow = LeapmotorGearMonitor.batteryReading()
+        val speedNow = LeapmotorGearMonitor.speedKmh
+        if (gearNow != null || socNow != null || speedNow != null) {
+            card.addView(label(
+                listOf(
+                    gearNow?.let { getString(R.string.adb_vehicle_gear_reading, it) },
+                    socNow?.let { getString(R.string.adb_battery_reading_percent_only, it) },
+                    speedNow?.let { getString(R.string.adb_vehicle_speed_reading, it) },
+                ).filterNotNull().joinToString("  "),
+                14, MUTED,
+            ))
+        } else {
+            card.addView(label(getString(R.string.c11_log_data_waiting), 14, MUTED))
+        }
+    }
+
+    private fun c11MapLayoutControls(card: LinearLayout) {
+        val insets = LeapmotorClusterMapLayout.fadeInsets(this)
+        val layout = LeapmotorClusterMapLayout.plan(LeapmotorClusterMapLayout.load(this), insets)
+        val reference = LeapmotorClusterMapLayout.plan(LeapmotorClusterMapLayout.Settings(), insets)
+        card.addView(label(getString(R.string.settings_c11_map_layout_description), 14, MUTED))
+        fun slider(title: Int, values: List<Int>, current: Int, origin: Int? = null,
+            negative: Int = 0, positive: Int = 0, save: (Int) -> Unit) {
+            val describe: (Int) -> String = { value ->
+                if (origin == null) getString(R.string.leapmotor_cluster_mask_percent, value)
+                else {
+                    val pixels = LeapmotorClusterMapLayout.offsetPixels(value, origin)
+                    when {
+                        pixels < 0 -> getString(negative, -pixels)
+                        pixels > 0 -> getString(positive, pixels)
+                        else -> getString(R.string.settings_c11_map_position_default)
+                    }
+                }
+            }
+            searchIndexSink?.add(getString(title))
+            card.addView(OverlaySliderRow(this, getString(title), values, current, describe,
+                stackedValue = origin != null).also { row ->
+                row.slider.contentDescription = getString(title)
+                ViewCompat.setStateDescription(row.slider, describe(current))
+                row.onValueChanged = { value -> ViewCompat.setStateDescription(row.slider, describe(value)) }
+                row.slider.layoutDirection = View.LAYOUT_DIRECTION_LTR
+                row.slider.isEnabled = values.size > 1
+                row.commitDiscreteChanges = true
+                row.onSave = { value -> save(value); markReconnectNeeded() }
+                row.slider.tag = title
+                row.onCommit = {
+                    val focused = row.slider.hasFocus()
+                    render()
+                    if (focused) window.decorView.findViewWithTag<SeekBar>(title)?.requestFocus()
+                }
+            })
+            if (origin != null) {
+                card.addView(row().apply {
+                    layoutDirection = View.LAYOUT_DIRECTION_LTR
+                    addView(label(getString(if (title == R.string.settings_c11_map_horizontal)
+                        R.string.marker_left else R.string.marker_up), 14, MUTED).apply {
+                        gravity = Gravity.LEFT or Gravity.CENTER_VERTICAL
+                    },
+                        LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(label(getString(if (title == R.string.settings_c11_map_horizontal)
+                        R.string.marker_right else R.string.marker_down), 14, MUTED).apply {
+                        gravity = Gravity.RIGHT or Gravity.CENTER_VERTICAL
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                })
+            }
+        }
+        slider(R.string.settings_c11_map_size, LeapmotorClusterMapLayout.sizes, layout.size) {
+            LeapmotorClusterMapLayout.saveSize(this, it)
+        }
+        slider(R.string.settings_c11_map_horizontal, layout.xRange.toList(), layout.x, reference.x,
+            R.string.settings_c11_map_offset_left, R.string.settings_c11_map_offset_right) {
+            LeapmotorClusterMapLayout.saveX(this, it)
+        }
+        slider(R.string.settings_c11_map_vertical, layout.yRange.toList(), layout.y, reference.y,
+            R.string.settings_c11_map_offset_up, R.string.settings_c11_map_offset_down) {
+            LeapmotorClusterMapLayout.saveY(this, it)
+        }
+        card.addView(button(getString(R.string.settings_c11_map_layout_reset), false) {
+            LeapmotorClusterMapLayout.reset(this)
+            render()
+            markReconnectNeeded()
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(SETTINGS_BLOCK_GAP_DP) })
+    }
+
+    /** A 1%-step slider row; the caller decides whether a saved value needs a reconnect. */
     private fun overlaySliderRow(title: String, values: List<Int>, current: Int, describe: (Int) -> String): OverlaySliderRow =
         OverlaySliderRow(this, title, values, current, describe)
 
@@ -3652,17 +3748,24 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         private val steps: List<Int>,
         current: Int,
         private val describe: (Int) -> String,
+        stackedValue: Boolean = false,
     ) : LinearLayout(context) {
         var onSave: (Int) -> Unit = {}
+        var onValueChanged: (Int) -> Unit = {}
         /** Fired once when the finger leaves the slider, for saves that need a reconnect. */
         var onCommit: () -> Unit = {}
+        var commitDiscreteChanges = false
+        private var tracking = false
         val slider: SeekBar
 
         init {
             orientation = VERTICAL
             val valueView = label(describe(current), 16, ACCENT, true)
-            val head = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(12), 0, 0) }
-            head.addView(label(title, 16, TEXT, true), LinearLayout.LayoutParams(0, -2, 1f))
+            val head = (if (stackedValue) column() else row()).apply {
+                gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(12), 0, 0)
+            }
+            head.addView(label(title, 16, TEXT, true),
+                if (stackedValue) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
             head.addView(valueView)
             addView(head)
             slider = SeekBar(context).apply {
@@ -3674,10 +3777,14 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                     override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                         val value = steps[progress.coerceIn(steps.indices)]
                         valueView.text = describe(value)
-                        if (fromUser) onSave(value)
+                        onValueChanged(value)
+                        if (fromUser) {
+                            onSave(value)
+                            if (commitDiscreteChanges && !tracking) onCommit()
+                        }
                     }
-                    override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-                    override fun onStopTrackingTouch(seekBar: SeekBar?) { onCommit() }
+                    override fun onStartTrackingTouch(seekBar: SeekBar?) { tracking = true }
+                    override fun onStopTrackingTouch(seekBar: SeekBar?) { tracking = false; onCommit() }
                 })
             }
             addView(slider, LinearLayout.LayoutParams(-1, dp(44)))
@@ -3894,11 +4001,12 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         toggle(card, getString(R.string.settings_external_controller), getString(R.string.settings_external_controller_description),
             AirPlayPersistence.loadExternalController(this)) { AirPlayPersistence.saveExternalController(this, it) }
         // Keep previously configured controls reachable even if package detection misses the car.
-        if (byd || zoomAvailable || WheelZoomSettings.joystick(this)) wheelKeyControls(card)
+        if (!LeapmotorClusterLayout.isC11() && (byd || zoomAvailable || WheelZoomSettings.joystick(this))) wheelKeyControls(card)
     }
 
     // Map zoom only works where the dashboard map card used to show these controls.
     private fun wheelMapZoomAvailable(): Boolean {
+        if (LeapmotorClusterLayout.isC11()) return false
         if (!AirPlayPersistence.loadClusterMapEnabled(this)) return false
         val adbCluster = AdbClusterRouter.enabled(this)
         if (DiLink51ClusterLayout.supported() && !adbCluster) return false
@@ -4369,7 +4477,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         card.addView(label(chargingText, 14, if (charging.supported) MUTED else WARNING))
     }
 
-    private fun showVehicleDataSettings(card: LinearLayout, capabilities: BydVehicleCapabilities?) {
+    private fun bluetoothSuspendControls(card: LinearLayout) {
         toggle(card, getString(R.string.bt_suspend_during_carplay), getString(R.string.bt_suspend_during_carplay_description),
             AirPlayPersistence.loadBtSuspendDuringCarplay(this), enabled = !adbSwitchChangePending) {
             AirPlayPersistence.saveBtSuspendDuringCarplay(this, it)
@@ -4384,6 +4492,10 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
                 markReconnectNeeded()
             }
         }
+    }
+
+    private fun showVehicleDataSettings(card: LinearLayout, capabilities: BydVehicleCapabilities?) {
+        bluetoothSuspendControls(card)
         if (capabilities == null || capabilities.batterySupported) {
             toggle(card, getString(R.string.car_battery_for_the_iphone),
                 getString(R.string.car_battery_for_the_iphone_description),
@@ -4635,6 +4747,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
      * trigger one automatic field re-probe.
      */
     private fun validateSavedVehicleConfigurationAutomatically() {
+        if (LeapmotorClusterLayout.isC11()) return
         if (!BydOutputSettings.legacyVehicleProbe(this)) return
         val saved = BydVehicleFieldStore.load(applicationContext) ?: return
         if (adbSwitchChangePending || vehicleAdbWorkInProgress()) {
@@ -4771,6 +4884,7 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
     }
 
     private fun scheduleAutomaticVehicleValidation() {
+        if (LeapmotorClusterLayout.isC11()) return
         if (!BydOutputSettings.legacyVehicleProbe(this)) {
             automaticVehicleValidationPending = false
             handler.removeCallbacks(automaticVehicleValidation)
@@ -5539,11 +5653,17 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         )
         // Where the car's battery would come from, and whether CarPlay has been told about it at all.
         appendLine(
-            "Vehicle status: source=" + when {
-                LeapmotorClusterLayout.isC11() -> "c11-logcat"
+            "Saved vehicle status preference: source=" + when {
+                LeapmotorClusterLayout.isC11() ->
+                    if (AirPlayPersistence.loadC11VehicleLogsEnabled(appContext)) "c11-logcat" else "none"
                 com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(appContext) -> "byd-adb"
                 else -> "none"
             } + " soc=${LeapmotorGearMonitor.socPercent?.toString() ?: "unread"}%",
+        )
+        if (LeapmotorClusterLayout.isC11()) appendLine(
+            "C11 vehicle logs: saved=${AirPlayPersistence.loadC11VehicleLogsEnabled(appContext)} " +
+                "reader=${LeapmotorGearMonitor.logcatState()} apply=next-connection " +
+                "bydBatteryWarmup=disabled bydWheelSpeed=disabled",
         )
         appendLine("MTK decoder tuning preference: ${if (AirPlayPersistence.loadMtkDecoderTuning(appContext)) "enabled" else "disabled"}")
         appendLine("CarPlay size: ${com.shilapi.xcertplay.airplay.CarPlaySize.fromWidthMillimeters(AirPlayPersistence.loadWidthPhysicalMm(appContext)).label}")
@@ -5820,101 +5940,6 @@ class DiPlayActivity : ComponentActivity(), AppAppearanceOwner {
         parent.addView(result.rowView)
         return result.switch
     }
-    private fun ambientConfigurationLabel(value: AmbientMusicSettings.Values): String {
-        val mode = if (!value.music) getString(R.string.settings_ambient_static) else when (value.colorMode) {
-            AmbientColorMode.ENERGY -> getString(R.string.settings_ambient_energy)
-            AmbientColorMode.BEAT -> getString(R.string.settings_ambient_beat)
-            AmbientColorMode.TEMPO -> getString(R.string.settings_ambient_tempo)
-            AmbientColorMode.BASS -> getString(R.string.settings_ambient_bass)
-            AmbientColorMode.SMART -> getString(R.string.settings_ambient_smart)
-        }
-        val speed = when (value.speed) { AmbientColorSpeed.SLOW -> getString(R.string.settings_ambient_slow); AmbientColorSpeed.STANDARD -> getString(R.string.settings_ambient_standard); AmbientColorSpeed.FAST -> getString(R.string.settings_ambient_fast) }
-        return getString(R.string.settings_ambient_configuration) + " · " + getString(R.string.settings_ambient_summary, getString(if (value.enabled) R.string.settings_ambient_enabled else R.string.settings_ambient_disabled), mode, speed, value.selectedColors.size, value.brightness)
-    }
-
-    private fun showAmbientConfiguration() {
-        var draft = AmbientMusicSettings.load(this)
-        val body = column().apply { setPadding(dp(24), dp(12), dp(24), dp(12)) }
-        body.addView(label(getString(R.string.settings_ambient_parked_notice), 14, MUTED))
-        toggle(body, getString(R.string.settings_ambient_enable), getString(R.string.settings_ambient_enable_description), draft.enabled) {
-            draft = draft.copy(enabled = it)
-        }
-        toggle(body, getString(R.string.settings_ambient_music), getString(R.string.settings_ambient_music_description), draft.music) {
-            draft = draft.copy(music = it)
-        }
-        toggle(body, getString(R.string.settings_ambient_album), getString(R.string.settings_ambient_album_description), draft.colorSource == AmbientColorSource.ALBUM) {
-            draft = draft.copy(colorSource = if (it) AmbientColorSource.ALBUM else AmbientColorSource.SELECTED)
-        }
-        choice(body, getString(R.string.settings_ambient_color_mode), listOf(getString(R.string.settings_ambient_energy), getString(R.string.settings_ambient_beat), getString(R.string.settings_ambient_tempo), getString(R.string.settings_ambient_bass), getString(R.string.settings_ambient_smart)), draft.colorMode.ordinal, reconnects = false) {
-            draft = draft.copy(colorMode = AmbientColorMode.entries[it])
-        }
-        choice(body, getString(R.string.settings_ambient_speed), listOf(getString(R.string.settings_ambient_slow), getString(R.string.settings_ambient_standard), getString(R.string.settings_ambient_fast)), draft.speed.ordinal, reconnects = false) {
-            draft = draft.copy(speed = AmbientColorSpeed.entries[it])
-        }
-        val paletteButton = button(getString(R.string.settings_ambient_palette_summary, draft.selectedColors.size), false) {}
-        paletteButton.setOnClickListener {
-            val checked = BooleanArray(31) { it + 1 in draft.selectedColors }
-            val paletteDialog = AlertDialog.Builder(this).setTitle(getString(R.string.settings_ambient_palette))
-                .setMultiChoiceItems((1..31).map { it.toString() }.toTypedArray(), checked) { _, index, selected -> checked[index] = selected }
-                .setNeutralButton(getString(R.string.settings_ambient_select_all), null)
-                .setPositiveButton(getString(R.string.save), null)
-                .setNegativeButton(getString(R.string.cancel), null).create()
-            paletteDialog.setOnShowListener {
-                paletteDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener {
-                    checked.fill(true)
-                    for (index in checked.indices) paletteDialog.listView.setItemChecked(index, true)
-                }
-                paletteDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                    val selected = checked.indices.filter { checked[it] }.map { it + 1 }
-                    if (selected.isEmpty()) toast(getString(R.string.settings_ambient_select_one))
-                    else {
-                        draft = draft.copy(selectedColors = selected, color = selected.first())
-                        paletteButton.text = getString(R.string.settings_ambient_palette_summary, selected.size)
-                        paletteDialog.dismiss()
-                    }
-                }
-            }
-            paletteDialog.show()
-        }
-        body.addView(paletteButton, matchButton(0, 60)); body.addView(space(12))
-        choice(body, getString(R.string.settings_ambient_brightness), (0..6).map { if (it == 0) getString(R.string.settings_ambient_minimum) else it.toString() }, draft.brightness, reconnects = false) {
-            draft = draft.copy(brightness = it)
-        }
-        choice(body, getString(R.string.settings_ambient_area), listOf(getString(R.string.settings_ambient_front), getString(R.string.settings_ambient_rear), getString(R.string.settings_ambient_all)), draft.area - 1, reconnects = false) {
-            draft = draft.copy(area = it + 1)
-        }
-        val dialog = AlertDialog.Builder(this).setTitle(getString(R.string.settings_ambient_configuration))
-            .setView(ScrollView(this).apply { addView(body) })
-            .setPositiveButton(getString(R.string.save), null)
-            .setNegativeButton(getString(R.string.cancel), null).create()
-        dialog.setOnShowListener {
-            val save = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-            save.setOnClickListener {
-                val selected = draft.copy(colorCycle = draft.music)
-                fun commit() {
-                    AmbientMusicSettings.save(this, selected)
-                    dialog.dismiss()
-                    render()
-                }
-                if (!selected.enabled) commit()
-                else {
-                    save.isEnabled = false
-                    save.text = getString(R.string.settings_ambient_checking)
-                    ambientSupportCheck(applicationContext).whenComplete { supported, _ ->
-                        runOnUiThread {
-                            if (!dialog.isShowing || isFinishing || isDestroyed) return@runOnUiThread
-                            save.isEnabled = true
-                            save.text = getString(R.string.save)
-                            if (supported == true) commit()
-                            else toast(getString(R.string.settings_ambient_unavailable))
-                        }
-                    }
-                }
-            }
-        }
-        dialog.show()
-    }
-
     // [announcesReconnect] labels a choice whose [save] reconnects by itself.
     private fun choice(parent: LinearLayout, title: String, options: List<String>, current: Int, reconnects: Boolean = true,
         announcesReconnect: Boolean = reconnects, enabled: Boolean = true, save: (Int) -> Unit) {

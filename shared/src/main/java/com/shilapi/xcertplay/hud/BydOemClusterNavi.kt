@@ -19,10 +19,12 @@ object BydOemClusterNavi {
     private var session: OemClusterHoldSession? = null
 
     fun applicable(context: Context): Boolean =
-        runCatching { context.packageManager.getPackageInfo(STOCK_MAP, 0) }.isSuccess
+        !com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11() &&
+            runCatching { context.packageManager.getPackageInfo(STOCK_MAP, 0) }.isSuccess
 
     /** Blocking, for the ADB routing worker only; never call from the Android main thread. */
     fun holdForLaunch(context: Context, lease: String, current: () -> Boolean): Boolean {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return false
         val app = context.applicationContext
         return runCatching {
             worker.submit<Boolean> {
@@ -44,7 +46,10 @@ object BydOemClusterNavi {
         }
     }
 
-    fun restoreIfNeeded(context: Context) = release(context)
+    fun restoreIfNeeded(context: Context) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11() && !prefs(context).contains(JOURNAL)) return
+        release(context)
+    }
 
     private fun state(app: Context): OemClusterHoldSession = session ?: OemClusterHoldSession(
         readState = { target -> runCatching {

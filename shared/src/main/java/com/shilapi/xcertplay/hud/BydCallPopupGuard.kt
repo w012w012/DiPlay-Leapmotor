@@ -28,10 +28,11 @@ object BydCallPopupGuard {
 
     fun update(context: Context, candidate: Any, foregroundConnected: Boolean,
         connected: () -> Boolean) = synchronized(gate) {
-        if (!foregroundConnected && owner !== candidate) return@synchronized
-        if (foregroundConnected && owner === candidate) return@synchronized
-        owner = if (foregroundConnected) candidate else null
-        sessionReady = if (foregroundConnected) connected else ({ false })
+        val eligible = foregroundConnected && !com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()
+        if (!eligible && owner !== candidate) return@synchronized
+        if (eligible && owner === candidate) return@synchronized
+        owner = if (eligible) candidate else null
+        sessionReady = if (eligible) connected else ({ false })
         app = context.applicationContext
         generation++
         gate.notifyAll()

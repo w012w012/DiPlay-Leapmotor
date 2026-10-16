@@ -71,6 +71,7 @@ internal object LeapmotorGearMonitor {
     @Volatile private var controller: CarPlayController? = null
     @Volatile var onDiagnostic: ((String) -> Unit)? = null
     private var pollThread: Thread? = null
+    @Volatile private var logcatEnabled = true
     private var rawGear: Int = UNKNOWN_GEAR
     private var pausedByReverse = false
     private var adb: LocalAdb? = null
@@ -98,6 +99,7 @@ internal object LeapmotorGearMonitor {
         appContext = context.applicationContext
         this.controller = controller
         if (receiver != null) return
+        logcatEnabled = !LeapmotorClusterLayout.isC11() || AirPlayPersistence.loadC11VehicleLogsEnabled(context)
         val filter = IntentFilter(GEAR_ACTION)
         val created = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
@@ -122,7 +124,11 @@ internal object LeapmotorGearMonitor {
         receiver = created.takeIf { registered }
         startPoll()
         report("gear monitor listening on $GEAR_ACTION registered=$registered")
+        report("DiPlay-C11 vehicle log reader=${if (logcatEnabled) "enabled" else "disabled"} " +
+            "apply=connection multimediaHeartbeat=enabled")
     }
+
+    fun logcatState(): String = if (controller == null) "detached" else if (logcatEnabled) "enabled" else "disabled"
 
     @Synchronized
     fun detach(expected: CarPlayController?) {
@@ -212,6 +218,9 @@ internal object LeapmotorGearMonitor {
      * format still shows up.
      */
     private fun pollLogcat() {
+        // Keep multimedia ownership broadcasts and passive receivers, without opening an ADB shell
+        // or running any fast/slow/census logcat commands when the driver does not need vehicle data.
+        if (!logcatEnabled) return
         val context = appContext ?: return
         if (controller == null) return
         val output = runAdb(context, C11LogcatProtocol.pollCommand()) ?: return

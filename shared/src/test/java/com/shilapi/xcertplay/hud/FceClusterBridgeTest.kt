@@ -48,6 +48,23 @@ class FceClusterBridgeTest {
     private val icon2 = FceClusterProperties.ICON_SET_2
     private val distance = FceClusterProperties.DISTANCE
 
+    @Test fun c11KeepsAnIndependentlyOptedInFceOutput() {
+        val fingerprint = android.os.Build.FINGERPRINT
+        org.robolectric.shadows.ShadowBuild.setFingerprint("qti/msmnile_gvmq/msmnile_gvmq:9/PQ1A/test:user/test-keys")
+        try {
+            BydOutputSettings.setEnabled(app, false)
+            maneuver(index = 2, type = 1)
+            route(state = 1, distance = 178, current = 2)
+            assertEquals(listOf(status to 2, icon2 to 0, icon to 19, distance to 180), writes)
+            BydOutputSettings.setFceCluster(app, false)
+            writes.clear()
+            maneuver(index = 3, type = 2)
+            route(state = 1, distance = 50, current = 3)
+            assertEquals(listOf(icon to 0, icon2 to 0, distance to 0, status to 1, status to 0), writes)
+            assertTrue(writes.none { it.first == icon && it.second > 0 })
+        } finally { org.robolectric.shadows.ShadowBuild.setFingerprint(fingerprint) }
+    }
+
     @Test
     fun `nothing is written until the driver opts in`() {
         BydOutputSettings.setFceCluster(app, false)

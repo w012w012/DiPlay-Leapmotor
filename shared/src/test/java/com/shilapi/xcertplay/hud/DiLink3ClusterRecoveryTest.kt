@@ -47,7 +47,7 @@ class DiLink3ClusterRecoveryTest {
         prefs.edit().putBoolean("restore_stock_mode", true).commit()
         BydOutputSettings.setEnabled(app, false)
         Shell.response = { null }
-        BydNavigationOutputs.onAppOpened(app)
+        BydNavigationOutputs.onAppOpened(app, preloadVehicleBattery = false)
         drain()
         assertEquals(listOf(stock), Shell.commands.toList())
         assertTrue(prefs.getBoolean("restore_stock_mode", false))

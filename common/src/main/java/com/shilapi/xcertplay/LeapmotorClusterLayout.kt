@@ -21,9 +21,6 @@ import com.shilapi.xcertplay.airplay.CarPlayClusterDisplay
  * the renderer's own layout or the map arrives stretched or clipped.
  */
 internal object LeapmotorClusterLayout {
-    /** The whole `qti/msmnile_gvmq` family (Snapdragon SA8155P IVI) seen on the C11. */
-    private const val FINGERPRINT_PART = "qti/msmnile_gvmq"
-
     private const val PANEL_WIDTH = 1920
     private const val PANEL_HEIGHT = 720
     /** CarPlay's dashboard/cluster stream uses a square picture on this firmware. */
@@ -39,8 +36,7 @@ internal object LeapmotorClusterLayout {
     const val DEFAULT_SCALE_PERCENT = 100
 
     /**
-     * The panel edge the map would otherwise cut into abruptly. LeapTool's instrument mask covers the
-     * same edges with a baked PNG; the gradient here is drawn instead, in the panel's own night colour.
+     * The left and top edge widths where the map fades to reveal the car's own instrument background.
      */
     const val DEFAULT_MASK_LEFT_PERCENT = 27
     const val DEFAULT_MASK_TOP_PERCENT = 10
@@ -53,17 +49,14 @@ internal object LeapmotorClusterLayout {
      * gauges show through: nothing is painted over the map, which is why it blends with any theme.
      * It needs the cluster window on a [android.view.TextureView]: a SurfaceView is composited under
      * the window, so nothing the window draws can give it alpha.
-     *
-     * [MASK_MODE_COLOR] paints the measured colour band instead — what LeapTool's baked PNGs do, and
-     * the only option that works on the SurfaceView path.
      */
     const val MASK_MODE_ALPHA = 0
-    const val MASK_MODE_COLOR = 1
+    // Keep the saved off value at 2; retired value 1 is read as alpha by AirPlayPersistence.
     const val MASK_MODE_OFF = 2
     const val DEFAULT_MASK_MODE = MASK_MODE_ALPHA
 
     fun isC11(fingerprint: String = Build.FINGERPRINT): Boolean =
-        fingerprint.contains(FINGERPRINT_PART, ignoreCase = true)
+        HeadUnitPlatform.isLeapmotorC11(fingerprint)
 
     /**
      * The display the car itself calls its meter, when the firmware publishes the property. Null

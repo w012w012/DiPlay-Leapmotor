@@ -23,7 +23,6 @@ class AdbClusterActivity : Activity() {
     private var videoTexture: ClusterVideoTexture? = null
     private var turnCard: ClusterTurnCardView? = null
     private var safeAreaPreview: SafeAreaEditorView? = null
-    private var mask: ClusterEdgeMaskView? = null
     internal var routeStatus = ""
         private set
 
@@ -79,19 +78,6 @@ class AdbClusterActivity : Activity() {
             dimOutside = false
         }
         root.addView(safeAreaPreview, FrameLayout.LayoutParams(-1, -1))
-        // The C11's edge fades belong to the projection itself: the activity route draws the same
-        // window the Presentation route does, so the seam is blended in both. It is added after the
-        // video, because a SurfaceView clears the canvas where it draws.
-        mask = clusterEdgeMask(this).also {
-            if (it == null) {
-                ClusterProjectionState.mask("leapmotor mask off: both widths are 0, nothing drawn route=activity")
-            } else {
-                root.addView(it, FrameLayout.LayoutParams(-1, -1))
-                ClusterProjectionState.mask(
-                    "leapmotor mask attached route=activity left=${it.leftPercent}% top=${it.topPercent}%",
-                )
-            }
-        }
         setContentView(root)
         root.post {
             val attached = root.display?.displayId ?: -1
@@ -119,7 +105,6 @@ class AdbClusterActivity : Activity() {
         turnCard?.setOpacity(ClusterActivityOutput.cardOpacity)
         turnCard?.setNightMode(ClusterActivityOutput.cardNight)
         turnCard?.setGuidance(if (ClusterActivityOutput.streamActive) ClusterActivityOutput.guidance else null)
-        mask?.setNight(ClusterActivityOutput.cardNight)
         updateSafeAreaPreview()
     }
 

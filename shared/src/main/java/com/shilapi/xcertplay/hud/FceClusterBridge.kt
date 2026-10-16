@@ -8,8 +8,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Publishes CarPlay arrows and distance to the instrument cluster of FCE head units through
- * [FceCarPropertyWriter], independently of the BYD outputs. Needs both the navigation output switch
- * ([BydOutputSettings.enabled]) and its own opt-in ([BydOutputSettings.fceCluster]).
+ * [FceCarPropertyWriter], independently of the BYD outputs. Its own opt-in remains available on C11;
+ * other head units retain their existing navigation master switch as well.
  */
 internal object FceClusterBridge {
     private const val TAG = "DiPlay-FCE-Cluster"
@@ -55,7 +55,10 @@ internal object FceClusterBridge {
     private fun tick() = synchronized(lock) { if (context != null) refreshLocked() }
 
     private fun enabledLocked(): Boolean =
-        context?.let { BydOutputSettings.enabled(it) && BydOutputSettings.fceCluster(it) } == true
+        context?.let {
+            (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11() || BydOutputSettings.enabled(it)) &&
+                BydOutputSettings.fceCluster(it)
+        } == true
 
     private fun refreshLocked() {
         if (!enabledLocked()) return output.stop()

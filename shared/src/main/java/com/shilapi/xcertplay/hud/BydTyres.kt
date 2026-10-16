@@ -60,6 +60,7 @@ object BydTyreStatus {
 
     @Synchronized
     fun start(context: Context) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         if (task != null || noService) return
         val app = context.applicationContext
         task = executor.scheduleWithFixedDelay({ poll(app) }, 0, READ_MILLIS, TimeUnit.MILLISECONDS)

@@ -28,6 +28,7 @@ internal object ClusterProjectionState {
     private var presentations = 0
     private var activity: String? = null
     private var mask: String? = null
+    private var mapLayout: String? = null
 
     /** The cluster Presentation route: shown, skipped because no display, or failed. */
     fun presentation(line: String) {
@@ -47,6 +48,12 @@ internal object ClusterProjectionState {
         note(line)
     }
 
+    /** The C11 source-side route-fit region, captured when the connection is configured. */
+    fun mapLayout(line: String) {
+        synchronized(lock) { mapLayout = line }
+        note(line)
+    }
+
     /** Any other route fact worth keeping, such as the viewport the window was measured for. */
     fun note(line: String) {
         Log.i(TAG, line)
@@ -60,6 +67,7 @@ internal object ClusterProjectionState {
             "clusterProjectionPresentation=${presentation ?: "none"}",
             "clusterProjectionActivityRoute=${activity ?: "none"}",
             "clusterProjectionMask=${mask ?: "none"}",
+            "clusterProjectionMapLayout=${mapLayout ?: "none"}",
         )
     }
 
@@ -69,5 +77,6 @@ internal object ClusterProjectionState {
         presentations = 0
         activity = null
         mask = null
+        mapLayout = null
     }
 }

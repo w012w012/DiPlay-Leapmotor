@@ -787,7 +787,7 @@ object WheelZoomSettings {
     /** The mode key switches zoom mode until pressed again, or turns it on for a few seconds. */
     enum class Behaviour { TOGGLE, TIMED }
 
-    fun enabled(context: Context): Boolean = prefs(context).getBoolean(KEY_ENABLED, false)
+    fun enabled(context: Context): Boolean = !LeapmotorClusterLayout.isC11() && prefs(context).getBoolean(KEY_ENABLED, false)
 
     fun setEnabled(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).apply()
@@ -802,7 +802,7 @@ object WheelZoomSettings {
         WheelKeyService.settingsChanged()
     }
 
-    fun joystick(context: Context): Boolean = prefs(context).getBoolean(KEY_JOYSTICK, false)
+    fun joystick(context: Context): Boolean = !LeapmotorClusterLayout.isC11() && prefs(context).getBoolean(KEY_JOYSTICK, false)
 
     fun setJoystick(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_JOYSTICK, enabled).apply()

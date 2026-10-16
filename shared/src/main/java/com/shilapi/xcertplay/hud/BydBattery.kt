@@ -140,6 +140,7 @@ internal object BydBatteryStatus : VehicleStatusProvider {
 
     @Synchronized
     fun start(appContext: Context) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         context = appContext.applicationContext
         askedMillis = now()
         if (started) {
@@ -152,6 +153,7 @@ internal object BydBatteryStatus : VehicleStatusProvider {
     }
 
     override fun snapshot(): VehicleStatusSnapshot? {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return null
         askedMillis = now()
         val app = context ?: return null
         return cache.snapshot(BydOutputSettings.lowChargePercent(app))
@@ -166,6 +168,7 @@ internal object BydBatteryStatus : VehicleStatusProvider {
 
     /** Serialize both ADB readers without blocking snapshot() or the UI on shell I/O. */
     fun read(appContext: Context, reader: () -> BydBatteryReading?): BydBatteryReading? = synchronized(readLock) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return@synchronized null
         val generation = synchronized(publicationLock) { probePublicationGeneration }
         val reading = reader()
         synchronized(publicationLock) {

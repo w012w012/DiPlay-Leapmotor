@@ -9,6 +9,10 @@ import kotlin.math.roundToInt
 /** Independent reader: does not drain or stop the iPhone dead-reckoning source. */
 object BydClusterSpeedReader {
     fun observe(context: Context, changed: (Int?) -> Unit): () -> Unit {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) {
+            changed(null)
+            return {}
+        }
         val app = context.applicationContext
         val shell = BydAdbShell("DiPlay-Cluster-Speed")
         val executor = Executors.newSingleThreadScheduledExecutor { task ->

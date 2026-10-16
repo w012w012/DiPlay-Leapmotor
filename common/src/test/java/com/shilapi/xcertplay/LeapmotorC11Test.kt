@@ -7,8 +7,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.hardware.display.DisplayManager
 import android.view.Display
-import android.view.Gravity
-import android.view.SurfaceView
 import android.view.View
 import android.widget.FrameLayout
 import com.shilapi.xcertplay.airplay.AirPlayInsets
@@ -129,12 +127,11 @@ class LeapmotorC11Test {
     }
 
     /**
-     * Settings the C11 has no use for are hidden rather than left to do nothing: the BYD media and dash
-     * wheel keys, the BYD ambient-light card and the same keys' map/volume controls.
+     * C11 hides vendor-only sections while keeping generic Siri and external-controller controls.
      */
     @Test fun theC11HidesTheSettingsItCannotUse() {
         assertEquals(
-            setOf(SettingsSection.WHEEL_KEYS, SettingsSection.NAVIGATION_WHEEL, SettingsSection.AMBIENT_LIGHTING),
+            setOf(SettingsSection.BYD_ADB, SettingsSection.BYD_NAVIGATION),
             hiddenSettingsSections(c11 = true),
         )
         assertTrue("every other head unit keeps every section", hiddenSettingsSections(c11 = false).isEmpty())
@@ -347,26 +344,21 @@ class LeapmotorC11Test {
     @Test fun aZeroWidthFadeIsNotBuiltAtAll() {
         AirPlayPersistence.saveClusterMaskLeftPercent(app, 0)
         AirPlayPersistence.saveClusterMaskTopPercent(app, 0)
-        assertNull(clusterEdgeMask(app))
+        assertNull(clusterEdgeFadeFrame(app))
         AirPlayPersistence.saveClusterMaskLeftPercent(app, 27)
-        assertEquals(27, clusterEdgeMask(app)?.leftPercent)
+        assertEquals(27, clusterEdgeFadeFrame(app)?.leftPercent)
     }
 
-    /** The alpha fade is the default; the painted band stays available and 0 widths still mean none. */
-    @Test fun theTransparentFadeIsTheDefaultAndTheBandStaysAvailable() {
-        assertEquals(LeapmotorClusterLayout.MASK_MODE_ALPHA, clusterEdgeFadeMode(app))
+    /** Transparent fading remains the default, and the existing off choice is preserved. */
+    @Test fun theTransparentFadeIsTheDefaultAndCanStillBeDisabled() {
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_ALPHA, AirPlayPersistence.loadClusterMaskMode(app))
         val frame = clusterEdgeFadeFrame(app)
         assertNotNull("the C11 square gets a fade frame by default", frame)
         assertEquals(27, frame!!.leftPercent)
         assertEquals(10, frame.topPercent)
 
-        AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_COLOR)
-        assertEquals(LeapmotorClusterLayout.MASK_MODE_COLOR, clusterEdgeFadeMode(app))
-        assertNull("the frame belongs to the alpha mode only", clusterEdgeFadeFrame(app))
-        assertNotNull("the colour mode still builds the painted band", clusterEdgeMask(app))
-
         AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_OFF)
-        assertEquals(LeapmotorClusterLayout.MASK_MODE_OFF, clusterEdgeFadeMode(app))
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_OFF, AirPlayPersistence.loadClusterMaskMode(app))
         assertNull(clusterEdgeFadeFrame(app))
 
         AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_ALPHA)
@@ -375,6 +367,23 @@ class LeapmotorC11Test {
         assertNull("no width, no fade", clusterEdgeFadeFrame(app))
         AirPlayPersistence.saveClusterMaskLeftPercent(app, LeapmotorClusterLayout.DEFAULT_MASK_LEFT_PERCENT)
         AirPlayPersistence.saveClusterMaskTopPercent(app, LeapmotorClusterLayout.DEFAULT_MASK_TOP_PERCENT)
+    }
+
+    @Test fun retiredColourAndUnknownSavedModesUseTransparencyWhileOffRemainsOff() {
+        val prefs = app.getSharedPreferences("xcertplay_airplay", Context.MODE_PRIVATE)
+        for (saved in listOf(1, -1, 99)) {
+            // Seed the actual old value, bypassing the new writer's input normalization.
+            prefs.edit().putInt("leapmotor_cluster_mask_mode", saved).commit()
+            assertEquals(LeapmotorClusterLayout.MASK_MODE_ALPHA, AirPlayPersistence.loadClusterMaskMode(app))
+            assertNotNull(clusterEdgeFadeFrame(app))
+        }
+        prefs.edit().putInt("leapmotor_cluster_mask_mode", 2).commit()
+        assertEquals(LeapmotorClusterLayout.MASK_MODE_OFF, AirPlayPersistence.loadClusterMaskMode(app))
+        assertNull(clusterEdgeFadeFrame(app))
+        AirPlayPersistence.saveClusterMaskMode(app, 1)
+        assertEquals(0, prefs.getInt("leapmotor_cluster_mask_mode", -1))
+        AirPlayPersistence.saveClusterMaskMode(app, LeapmotorClusterLayout.MASK_MODE_OFF)
+        assertEquals(2, prefs.getInt("leapmotor_cluster_mask_mode", -1))
     }
 
     /**
@@ -478,28 +487,6 @@ class LeapmotorC11Test {
             "the C11 window must give a bigger card for its panel: ${at95.width}/720 vs ${byd.width}/1920",
             at95.width * 100 / 720 > byd.width * 100 / 1920,
         )
-    }
-
-    /**
-     * The fade has to sit above the video: a SurfaceView clears the canvas of the region it draws, so
-     * a fade added before it is erased on the first frame and the map stays hard-edged. The helper
-     * inserts it right after the video, and lays it out like the video, so it still covers the square
-     * when the window is not pinned to the viewport.
-     */
-    @Test fun theEdgeFadeIsInsertedAboveTheVideo() {
-        AirPlayPersistence.saveClusterMaskLeftPercent(app, 27)
-        AirPlayPersistence.saveClusterMaskTopPercent(app, 10)
-        val root = FrameLayout(app)
-        val video = SurfaceView(app)
-        val params = FrameLayout.LayoutParams(720, 720, Gravity.TOP or Gravity.LEFT).apply { leftMargin = 1200 }
-        root.addView(video, params)
-        root.addView(View(app), FrameLayout.LayoutParams(-1, -1))
-        val mask = attachClusterEdgeMask(root, video, params, app, night = true)
-        assertNotNull("the fade must be built when a width is set", mask)
-        assertEquals(root.indexOfChild(video) + 1, root.indexOfChild(mask))
-        assertEquals(720, mask!!.layoutParams.width)
-        assertEquals(720, mask.layoutParams.height)
-        assertEquals(1200, (mask.layoutParams as FrameLayout.LayoutParams).leftMargin)
     }
 
     /**

@@ -22,11 +22,13 @@ internal object BydDiLink3ClusterOutput {
 
     /** Also called when the setting is off, so an interrupted output is always recoverable. */
     fun restoreIfNeeded(appContext: Context) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11() && !prefs(appContext).contains(JOURNAL)) return
         initialize(appContext)
         requestApply()
     }
 
     fun setDesired(appContext: Context, mapShown: Boolean, guidanceActive: Boolean) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         desiredMode = when {
             mapShown -> BydDiLink3ClusterMode.Mode.PROJECTION
             guidanceActive -> BydDiLink3ClusterMode.Mode.SIMPLE_NAVIGATION
@@ -37,6 +39,7 @@ internal object BydDiLink3ClusterOutput {
     }
 
     fun prepareDisplay(appContext: Context, displayPresent: () -> Boolean) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         if (adbClusterRouteSelected(appContext)) return
         initialize(appContext)
         worker.execute {

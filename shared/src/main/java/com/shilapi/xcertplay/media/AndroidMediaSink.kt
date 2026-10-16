@@ -214,11 +214,12 @@ class AndroidMediaSink(
     private val vendorLowLatencyDecoder: Boolean = false,
     /** Opt-in MTK ACodec low-latency/no-reorder modes, with per-session automatic fallback. */
     private val mtkDecoderTuningEnabled: Boolean = false,
+    /** Disable pitch-changing buffer clock control on head units whose wireless bursts cause wow. */
+    private val mediaClockTrimEnabled: Boolean = true,
 ) : MediaSink {
     // Each downlink publishes its own reference; a mic must match that stream and sample rate.
     private val callEchoReferences = ConcurrentHashMap<AudioStreamId, EchoReference>()
     private val appContext = context?.applicationContext
-    private val ambientSinkToken = AmbientMusicController.openSink(appContext)
     private val audioManager = appContext?.getSystemService(AudioManager::class.java)
     private val audioFocusCoordinator = AudioFocusCoordinator(
         appContext,
@@ -591,7 +592,6 @@ class AndroidMediaSink(
     }
 
     fun close() {
-        AmbientMusicController.closeSink(ambientSinkToken)
         synchronized(videoOwnershipLock) {
             videoClosed = true
             videoDecoders.entries.toList().forEach { (type, decoder) -> retire(type, decoder) }
@@ -680,11 +680,11 @@ class AndroidMediaSink(
             navigationStreamType,
             mediaBufferMillis,
             onAudioDiagnostic,
-            ambientSinkToken,
             speakerphoneCall = format.audioType == "telephony" &&
                 appContext != null && BydBluetoothSuspend.isSuspendedByUs(appContext),
             echoReference = echoReference,
             voiceFilter = callVoiceFilter && format.audioType == TELEPHONY_AUDIO_TYPE,
+            mediaClockTrimEnabled = mediaClockTrimEnabled,
         ).also { audioRenderers[id] = it }
     }
 
@@ -1695,11 +1695,11 @@ private class AudioRenderer(
     private val navigationStreamType: Int,
     private val mediaBufferMillis: Int,
     private val report: (String) -> Unit,
-    private val ambientSinkToken: Long,
     private val speakerphoneCall: Boolean = false,
     /** Receives the played call audio so the call microphone can cancel its echo. */
     private val echoReference: EchoReference? = null,
     voiceFilter: Boolean = false,
+    private val mediaClockTrimEnabled: Boolean = true,
 ) : Closeable {
     private data class AudioPacket(val rtp: ByteArray, val sample: Int)
 
@@ -1740,10 +1740,6 @@ private class AudioRenderer(
     private val maxArrivalGapMs = AtomicLong()
     private val frameBytes = if (format.channels >= 2) 4 else 2
     private var totalWrittenFrames = 0L
-    private val ambientMedia = AmbientMusicActivityPolicy.acceptsAudio(format.audioType, format.payloadType)
-    private val ambientEnvelope = AmbientMusicEnvelope()
-    private val ambientBass = AmbientMusicBassAnalyzer(format.sampleRate, pcmChannels)
-    private var ambientRendererToken = 0L
     private var writtenFramesThisWindow = 0L
     private var writeErrorsThisWindow = 0
     private var lastWriteErrorCode: Int? = null
@@ -1806,7 +1802,6 @@ private class AudioRenderer(
     }
 
     override fun close() {
-        AmbientMusicController.closeRenderer(ambientRendererToken)
         running = false
         NavigationPlayback.close(navigationPlaybackToken)
         thread.interrupt()
@@ -1962,18 +1957,15 @@ private class AudioRenderer(
             )
         }
         track = built
-        if (ambientMedia) {
-            ambientRendererToken = AmbientMusicController.openRenderer(ambientSinkToken, ambientEnvelope) {
-                built.playbackHeadPosition to (running && built.playState == AudioTrack.PLAYSTATE_PLAYING)
-            }
-        }
         diagnosticStage = "track-attributes"
         trackAttributes = audioTrackAttributesForFocus(built, attributes)
         diagnosticStage = "track-capacity"
         val capacityBytes = built.bufferSizeInFrames * frameBytes
         startThresholdBytes = MediaAudioBuffer.startBytesFor(plan.startBytes, capacityBytes, PREBUFFER_WRITE_CHUNK_BYTES)
         // Only music plays long enough for the clocks to drift apart; calls keep their echo reference exact.
-        clockTrim = if (mappedChannel == AudioChannel.MEDIA) MediaClockTrim(format.sampleRate, (startThresholdBytes / frameBytes).toLong()) else null
+        clockTrim = if (mappedChannel == AudioChannel.MEDIA && mediaClockTrimEnabled) {
+            MediaClockTrim(format.sampleRate, (startThresholdBytes / frameBytes).toLong())
+        } else null
         val trackMetadata = runCatching {
             "api=${Build.VERSION.SDK_INT} trackState=${built.state} trackRate=${built.sampleRate} " +
                 "usage=${trackAttributes?.usage} contentType=${trackAttributes?.contentType} " +
@@ -1983,7 +1975,7 @@ private class AudioRenderer(
             "rate=${format.sampleRate} channels=${format.channels} " +
             "route=$routeLabel " +
             "bufferMs=${capacityBytes * 1000L / bytesPerSecond} startMs=${startThresholdBytes * 1000L / bytesPerSecond} " +
-            trackMetadata)
+            "$trackMetadata clockTrim=${if (clockTrim != null) "on" else "off"}")
         Log.i(
             TAG,
             "audio track prepared type=${format.payloadType} audioType=${format.audioType} " +
@@ -2326,11 +2318,6 @@ private class AudioRenderer(
             }
             if (count < writeLength) partialWritesThisWindow++
             val framesWritten = count / frameBytes
-            if (ambientMedia && AmbientMusicController.wantsPcm(ambientRendererToken)) {
-                ambientEnvelope.append(totalWrittenFrames, framesWritten.toLong(),
-                    AmbientMusicEnvelope.pcmRms(data, offset + written, count),
-                    ambientBass.rms(data, offset + written, count))
-            }
             written += count
             totalWrittenFrames += framesWritten
             writtenFramesThisWindow += framesWritten
@@ -2460,7 +2447,7 @@ private class AudioRenderer(
             "lastWriteError=${lastWriteErrorCode ?: "none"} zeroWrites=$zeroWritesThisWindow " +
             "partialWrites=$partialWritesThisWindow " +
             "decoderDroppedTotal=$inputDropped outputBuffersTotal=$outputBuffers rebuffers=$rebufferCount " +
-            "playbackRate=${clockTrim?.rate ?: -1} ended=$force"
+            "playbackRate=${clockTrim?.rate ?: currentTrack?.playbackRate ?: -1} ended=$force"
         Log.i(STATS_TAG, line)
         report(line)
         if (format.codec != AudioCodecKind.LPCM) {
@@ -2512,7 +2499,6 @@ private class AudioRenderer(
     @Synchronized
     private fun release() {
         NavigationPlayback.close(navigationPlaybackToken)
-        AmbientMusicController.closeRenderer(ambientRendererToken)
         abandonAudioFocus()
         val codec = codec
         this.codec = null

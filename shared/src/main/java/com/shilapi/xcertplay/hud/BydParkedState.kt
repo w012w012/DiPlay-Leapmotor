@@ -14,6 +14,7 @@ internal object BydParkedState {
 
     /** Null when the gear cannot be read (no ADB over network, or another car). Blocking. */
     fun parked(context: Context): Boolean? {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return null
         return parked(shell.run(context, BydWheelSpeed.gearCommand(context)))
     }
 

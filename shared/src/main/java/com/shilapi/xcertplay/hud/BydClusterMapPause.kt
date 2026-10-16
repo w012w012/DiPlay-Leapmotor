@@ -42,6 +42,7 @@ internal object BydClusterMapPause {
 
     /** Never waits for the ticker: an adb read in flight does not hold up opening or reconnecting. */
     fun initialize(appContext: Context) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         context = appContext.applicationContext
         if (tickerStarted.compareAndSet(false, true)) {
             Executors.newSingleThreadScheduledExecutor { runnable ->
@@ -51,6 +52,10 @@ internal object BydClusterMapPause {
     }
 
     private fun tick() {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) {
+            streamControl?.invoke(true)
+            return
+        }
         val app = context ?: return
         val control = streamControl
         val pauseMap = control != null && clusterMapShown && BydOutputSettings.clusterStreamPause(app)

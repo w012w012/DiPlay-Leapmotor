@@ -206,6 +206,7 @@ internal object BydClusterSong {
      * shell as the song, so it shows only where that works.
      */
     fun note(text: String, source: Int? = null) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         val app = context ?: return
         val token = Any()
         val card = synchronized(state) {

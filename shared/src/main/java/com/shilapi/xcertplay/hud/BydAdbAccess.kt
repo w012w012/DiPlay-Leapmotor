@@ -41,6 +41,7 @@ object BydAdbAccess {
 
     /** Read and publish the same battery data that the settings page reports as ready. */
     internal fun readStatus(context: Context, shell: (String) -> String?): Status {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return Status(State.READY)
         val mode = BydClusterNaviMode.parseRead(shell(BydClusterNaviMode.READ_COMMAND))
         val battery = BydBatteryStatus.read(context) { BydBattery.read(context, shell) }
         val speedKmh = BydWheelSpeed.metersPerSecond(shell(BydWheelSpeed.speedCommand(context)))?.times(3.6)

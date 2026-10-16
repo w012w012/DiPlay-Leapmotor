@@ -125,6 +125,23 @@ class BydVehicleDataSettingsTest {
         assertEquals(0, backend.probeCalls)
     }
 
+    @Test fun c11DoesNotValidateAnOldSavedBydProbeOrExposeItsSettings() {
+        val fingerprint = android.os.Build.FINGERPRINT
+        org.robolectric.shadows.ShadowBuild.setFingerprint("qti/msmnile_gvmq/msmnile_gvmq:9/PQ1A/test:user/test-keys")
+        try {
+            BydVehicleFieldStore.save(context, supportedCapabilities(BydVehicleFieldStore.firmwareKey()))
+            BydOutputSettings.setWheelSpeedToIphone(context, true)
+            BydOutputSettings.setBatteryToIphone(context, true)
+            openSettings()
+            shadowOf(Looper.getMainLooper()).idle()
+            backend.runAll("diplay-byd13-auto-validate")
+            assertEquals(0, backend.checkCalls)
+            assertEquals(0, backend.probeCalls)
+            assertTrue(backend.tasks.none { it.first == "diplay-byd13-auto-validate" })
+            assertFalse(texts().any { it.text == activity.getString(R.string.advanced_vehicle_data) })
+        } finally { org.robolectric.shadows.ShadowBuild.setFingerprint(fingerprint) }
+    }
+
     @Test fun theHotspotCardCannotExposeFieldsRejectedByTheLegacyProbe() {
         val saved = supportedCapabilities(BydVehicleFieldStore.firmwareKey(), without = setOf(BydVehicleField.GEAR))
         BydVehicleFieldStore.save(context, saved)

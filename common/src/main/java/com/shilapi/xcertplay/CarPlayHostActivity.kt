@@ -187,7 +187,8 @@ class CarPlayHostActivity : ComponentActivity() {
             locationInformationEnabled = locationReportingEnabled,
             vehicleStatusEnabled = vehicleStatusWanted(),
             chargingConnectors = com.shilapi.xcertplay.hud.BydOutputSettings.chargingConnectors(this),
-            vehicleSpeedEnabled = locationReportingEnabled && com.shilapi.xcertplay.hud.BydOutputSettings.wheelSpeedToIphoneActive(this),
+            vehicleSpeedEnabled = locationReportingEnabled && !LeapmotorClusterLayout.isC11() &&
+                com.shilapi.xcertplay.hud.BydOutputSettings.wheelSpeedToIphoneActive(this),
         ),
         label = "DiPlay",
         hostName = "diplay-" + DiPlayBootstrap.deviceId(airPlayIdentity).replace(":", "").lowercase(),
@@ -517,6 +518,7 @@ class CarPlayHostActivity : ComponentActivity() {
     private var requestedSmallWindowForStream: Boolean? = null
     @Volatile private var adbNaviMode: com.shilapi.xcertplay.hud.BydClusterNaviMode? = null
     private var sessionLog: SessionLogFile? = null
+    private var performanceDiagnostics: RuntimePerformanceDiagnostics? = null
     private var gestureFingerCount = 3
     private var settingsGestureHint: TextView? = null
     private var gestureSequenceActive = false
@@ -713,6 +715,14 @@ class CarPlayHostActivity : ComponentActivity() {
         getSystemService(android.hardware.display.DisplayManager::class.java)
             ?.registerDisplayListener(clusterDisplayListener, mainHandler)
         initializeSessionLog()
+        if (LeapmotorClusterLayout.isC11()) {
+            val diagnosticLog = sessionLog
+            performanceDiagnostics = RuntimePerformanceDiagnostics.start(this, {
+                "sessionActive=${CarPlayBackgroundSession.active} hostVisible=$isActivityStarted " +
+                    "mainStream=${SCREEN_TYPE_MAIN in activeScreenStreamTypes} " +
+                    "clusterStream=${SCREEN_TYPE_ALT in activeScreenStreamTypes}"
+            }) { AsyncDiagnosticLog.append(diagnosticLog, it) }
+        }
         lastConfiguration = Configuration(resources.configuration)
         darkMode = savedInstanceState?.getBoolean("carplay_night_active")
             ?: nightModeOrNull(resources.configuration.uiMode) ?: false
@@ -1034,8 +1044,8 @@ class CarPlayHostActivity : ComponentActivity() {
         advancedAudioChannelMapping =
             advancedAudioChannelMappingSupported &&
                 AirPlayPersistence.loadAdvancedAudioChannelMapping(this)
-        val followClusterUsage = DiLink51ClusterLayout.automatic(this) ||
-            AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO
+        val followClusterUsage = !LeapmotorClusterLayout.isC11() && (DiLink51ClusterLayout.automatic(this) ||
+            AirPlayPersistence.loadClusterSmallWindowMode(this) == CLUSTER_SMALL_WINDOW_AUTO)
         if (followClusterUsage && clusterMonitor == null) {
             clusterMonitor = DiLink51ClusterMonitor(this, ::onClusterActivityState).also { it.start() }
         } else if (!followClusterUsage) {
@@ -1176,7 +1186,6 @@ class CarPlayHostActivity : ComponentActivity() {
             clusterPresentation = presentation
             updateClusterMapShown()
             presentation.setStreamActive(SCREEN_TYPE_ALT in activeScreenStreamTypes)
-            presentation.setMaskNightMode(darkMode)
             applyClusterTurnOverlay()
             ClusterProjectionState.presentation(
                 "cluster presentation shown display=${display.displayId} name=${display.name}",
@@ -1292,7 +1301,6 @@ class CarPlayHostActivity : ComponentActivity() {
             presentation.setTurnCardOverlay(xPercent, yPercent, sizePercent)
             presentation.setTurnCardOpacity(effectiveOpacity)
             presentation.setTurnCardNightMode(effectiveNight)
-            presentation.setMaskNightMode(darkMode)
             presentation.setTurnCardGuidance(if (overlay) clusterTurnGuidance else null)
         }
     }
@@ -1352,12 +1360,14 @@ class CarPlayHostActivity : ComponentActivity() {
      * Whether CarPlay may be told about the car's battery.
      *
      * BYD cars need the vehicle-data probe to have found their services. The C11 has no such services
-     * and reports its state of charge in the head unit's log, so it is always offered; the
+     * and reports its state of charge in the head unit's log, so it is offered only when the driver
+     * enables vehicle-log reading for this connection; the
      * identification drops the electric-vehicle declaration again while no reading is there (see
      * `withVehicleStatusFrom`), which is what keeps a head unit without ADB from claiming an EV.
      */
     private fun vehicleStatusWanted(): Boolean =
-        if (LeapmotorClusterLayout.isC11()) true else com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)
+        if (LeapmotorClusterLayout.isC11()) AirPlayPersistence.loadC11VehicleLogsEnabled(this)
+        else com.shilapi.xcertplay.hud.BydOutputSettings.batteryToIphoneActive(this)
 
     private fun clusterDisplayConfig(): AirPlayDisplayConfig? {
         adbClusterConfigured = false
@@ -1397,8 +1407,18 @@ class CarPlayHostActivity : ComponentActivity() {
                     ).also { MapMirrors.streamAspect = it.widthPixels.toDouble() / it.heightPixels }
                 }
                 if (LeapmotorClusterLayout.isC11()) {
-                    // The square stream the C11's renderer expects. The marker sliders move the
-                    // measured safe area when this firmware's uncovered area differs.
+                    val content = AirPlayPersistence.loadClusterContent(this)
+                    if (content != CarPlayClusterDisplay.Content.TURN_CARD) {
+                        val layout = LeapmotorClusterMapLayout.plan(LeapmotorClusterMapLayout.load(this),
+                            LeapmotorClusterMapLayout.fadeInsets(this))
+                        return LeapmotorClusterMapLayout.streamConfig(content, layout).also {
+                            MapMirrors.streamAspect = 1.0
+                            ClusterProjectionState.mapLayout("leapmotor mapLayout size=${layout.size}%" +
+                                " center=${layout.x}%/${layout.y}% stream=720x720 safeArea=${it.safeArea}" +
+                                " window=fixed fade=fixed videoTransform=identity apply=connection")
+                        }
+                    }
+                    // Retain the existing separate size/position controls for the official turn card.
                     val markerX = AirPlayPersistence.loadClusterMarkerXPercent(this)
                     val markerY = if (AirPlayPersistence.clusterMarkerCustomized(this)) {
                         AirPlayPersistence.loadClusterMarkerYPercent(this)
@@ -1679,6 +1699,8 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        performanceDiagnostics?.close()
+        performanceDiagnostics = null
         discardLastPicture()
         if (pictureCopyThreadStarted) pictureCopyThread.quitSafely()
         resetSidePanel()
@@ -2453,6 +2475,7 @@ class CarPlayHostActivity : ComponentActivity() {
 
     // Tyres through the head unit's adb shell; the reader stops by itself where there is no BYD autoservice.
     private fun startSidePanelTyres() {
+        if (LeapmotorClusterLayout.isC11()) return
         com.shilapi.xcertplay.hud.BydTyreStatus.start(this)
     }
 
@@ -2773,7 +2796,7 @@ class CarPlayHostActivity : ComponentActivity() {
                 ViewGroup.LayoutParams.WRAP_CONTENT,
             ).apply { topMargin = dp(12) },
         )
-        if (Build.VERSION.SDK_INT == 32) {
+        if (Build.VERSION.SDK_INT == 32 && !LeapmotorClusterLayout.isC11()) {
             content.addView(settingsSwitchRow(
                 label = getString(R.string.settings_hide_byd_call_popup),
                 checked = hideBydCallPopup,
@@ -4847,6 +4870,9 @@ class CarPlayHostActivity : ComponentActivity() {
                 onScreenStreamStateChanged(controllerGeneration, type, active)
             },
             mediaBufferMillis = AirPlayPersistence.loadMediaBufferMillis(this),
+            // C11's ~400 ms wireless bursts drive the buffer controller into audible pitch swings.
+            // Retain normal buffering/recovery while playing PCM at its negotiated sample rate.
+            mediaClockTrimEnabled = !LeapmotorClusterLayout.isC11(),
             onAudioDiagnostic = { message ->
                 if (message.startsWith("Microphone: ")) {
                     AsyncDiagnosticLog.append(diagnosticLog, message)
@@ -6072,7 +6098,7 @@ class CarPlayHostActivity : ComponentActivity() {
     }
 
     private fun shouldHideBydCallPopup(): Boolean =
-        hostAppearanceResumed && callPopupSessionReady && !menuOpen && !shuttingDown.get() &&
+        !LeapmotorClusterLayout.isC11() && hostAppearanceResumed && callPopupSessionReady && !menuOpen && !shuttingDown.get() &&
             !handshakeResetInProgress && !reconnectScheduled && CarPlayBackgroundSession.active &&
             CarPlayBackgroundSession.isOwner(this) && AirPlayPersistence.loadHideBydCallPopup(this)
 

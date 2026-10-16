@@ -142,6 +142,7 @@ object BydCarPlayCall {
     fun sessionStarted() {
         sessionActive = true
         val app = context ?: return
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         writer.execute { arm(app) }
     }
 
@@ -161,6 +162,7 @@ object BydCarPlayCall {
 
     /** The setting changed: show the current call now, or end the one DiPlay showed. */
     fun settingChanged(enabled: Boolean) {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         val app = context ?: return
         val card = if (enabled) current() else null
         writer.execute {
@@ -176,6 +178,7 @@ object BydCarPlayCall {
         PhoneAudioRoute.carPlayCall(false)
         synchronized(state) { state.clear() }
         val app = context ?: return
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         writer.execute { resetRetry(null); apply(app, null); disarm(app) }
     }
 

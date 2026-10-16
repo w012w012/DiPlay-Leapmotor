@@ -64,6 +64,7 @@ internal object BydWheelSpeedSource : VehicleSpeedSource {
 
     @Synchronized
     override fun start() {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return
         if (executor != null) return
         samples.clear()
         gear = null
@@ -85,6 +86,7 @@ internal object BydWheelSpeedSource : VehicleSpeedSource {
 
     @Synchronized
     override fun drain(): VehicleSpeedReading? {
+        if (com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11()) return null
         val current = gear ?: return null
         if (samples.isEmpty()) return null
         return VehicleSpeedReading(current, samples.toList()).also { samples.clear() }

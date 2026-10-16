@@ -89,6 +89,7 @@ object AirPlayPersistence {
     private const val KEY_CLUSTER_MASK_LEFT = "leapmotor_cluster_mask_left_percent"
     private const val KEY_CLUSTER_MASK_TOP = "leapmotor_cluster_mask_top_percent"
     private const val KEY_CLUSTER_MASK_MODE = "leapmotor_cluster_mask_mode"
+    private const val KEY_C11_VEHICLE_LOGS = "c11_vehicle_logs_enabled"
     private const val KEY_CLUSTER_CONTENT = "cluster_content"
     private const val KEY_CLUSTER_MARKER_X = "cluster_marker_horizontal_step"
     private const val KEY_CLUSTER_MARKER_Y = "cluster_marker_vertical_step"
@@ -485,7 +486,7 @@ object AirPlayPersistence {
             .getBoolean(KEY_BT_SUSPEND_DURING_CARPLAY, false)
 
     fun loadHideBydCallPopup(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        !LeapmotorClusterLayout.isC11() && context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getBoolean(KEY_HIDE_BYD_CALL_POPUP, false)
 
     fun saveHideBydCallPopup(context: Context, enabled: Boolean) {
@@ -765,7 +766,7 @@ object AirPlayPersistence {
     fun loadClusterMapEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_CLUSTER_MAP, false)
 
-    fun loadAdbClusterEnabled(context: Context): Boolean = loadClusterMapEnabled(context) &&
+    fun loadAdbClusterEnabled(context: Context): Boolean = !LeapmotorClusterLayout.isC11() && loadClusterMapEnabled(context) &&
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_ADB_CLUSTER_ACTIVITY, false)
 
     fun saveAdbClusterEnabled(context: Context, enabled: Boolean) {
@@ -776,7 +777,7 @@ object AirPlayPersistence {
         edit.apply()
     }
 
-    fun loadLegacyClusterEnabled(context: Context): Boolean = loadClusterMapEnabled(context) &&
+    fun loadLegacyClusterEnabled(context: Context): Boolean = !LeapmotorClusterLayout.isC11() && loadClusterMapEnabled(context) &&
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("platform21_cluster_enabled", false)
 
     fun saveLegacyClusterEnabled(context: Context, enabled: Boolean) {
@@ -822,16 +823,27 @@ object AirPlayPersistence {
     }
 
     /**
-     * How the C11 projection's left and top edges meet the car's own gauges: an alpha fade that lets
-     * the gauges show through the video, the measured colour band, or nothing at all.
+     * Whether the C11 projection fades into the car's own gauges. Retired mode 1 and unknown values
+     * use the transparent fade; the existing off value 2 remains off across upgrades.
      */
     fun loadClusterMaskMode(context: Context): Int =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_CLUSTER_MASK_MODE, LeapmotorClusterLayout.DEFAULT_MASK_MODE)
+            .getInt(KEY_CLUSTER_MASK_MODE, LeapmotorClusterLayout.DEFAULT_MASK_MODE).let {
+                if (it == LeapmotorClusterLayout.MASK_MODE_OFF) it else LeapmotorClusterLayout.MASK_MODE_ALPHA
+            }
+
+    /** C11 vehicle-log scanning is opt-in; sampled once when the next connection starts. */
+    fun loadC11VehicleLogsEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_C11_VEHICLE_LOGS, false)
+
+    fun saveC11VehicleLogsEnabled(context: Context, enabled: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putBoolean(KEY_C11_VEHICLE_LOGS, enabled).apply()
+    }
 
     fun saveClusterMaskMode(context: Context, mode: Int) {
+        val supported = if (mode == LeapmotorClusterLayout.MASK_MODE_OFF) mode else LeapmotorClusterLayout.MASK_MODE_ALPHA
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_CLUSTER_MASK_MODE, mode).apply()
+            .putInt(KEY_CLUSTER_MASK_MODE, supported).apply()
     }
 
     /** Whether the driver ever moved the cluster marker sliders away from the built-in default. */
@@ -865,7 +877,8 @@ object AirPlayPersistence {
     }
 
     fun loadClusterSpeedometerEnabled(context: Context): Boolean =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("cluster_speedometer_enabled", false)
+        !LeapmotorClusterLayout.isC11() &&
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean("cluster_speedometer_enabled", false)
 
     fun saveClusterSpeedometerEnabled(context: Context, enabled: Boolean) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
@@ -1249,7 +1262,7 @@ object AirPlayPersistence {
 
     /** 0 off, 1 always small-window positions, 2 auto from the cluster. Default off. */
     fun loadClusterSmallWindowMode(context: Context): Int =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+        if (LeapmotorClusterLayout.isC11()) 0 else context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getInt(KEY_CLUSTER_SMALL_WINDOW_MODE, 0).coerceIn(0, 2)
 
     fun saveClusterSmallWindowMode(context: Context, mode: Int) {

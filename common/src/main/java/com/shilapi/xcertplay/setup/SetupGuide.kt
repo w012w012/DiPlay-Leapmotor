@@ -20,8 +20,13 @@ object SetupGuide {
     data class Entry(val feature: Feature, val status: Status, val needsAdb: Boolean)
 
     /** Claims follow docs/COMPATIBILITY.md: community reports, not a certified support list. */
-    fun features(generation: DiLinkGeneration): List<Entry> {
+    fun features(generation: DiLinkGeneration, c11: Boolean = false): List<Entry> {
         fun entry(feature: Feature, status: Status, needsAdb: Boolean = false) = Entry(feature, status, needsAdb)
+        if (c11) return listOf(
+            entry(Feature.AUTO_CONNECT, Status.TESTED),
+            entry(Feature.LOCATION, Status.TESTED),
+            entry(Feature.CLUSTER_MAP, Status.EXPERIMENTAL),
+        )
         val dilink3 = generation == DiLinkGeneration.DILINK_3
         val dilink4 = generation == DiLinkGeneration.DILINK_4
         return listOf(
@@ -57,7 +62,8 @@ object SetupGuide {
      * re-runs the guide, or set DiPlay up before the guide existed, keeps the routing left on automatic.
      */
     fun applyFirstSetupDefaults(context: Context, generation: DiLinkGeneration, phoneChosen: Boolean): Boolean =
-        shouldOpenOnLaunch(seen(context), phoneChosen) && applyGenerationDefaults(context, generation)
+        !com.shilapi.xcertplay.HeadUnitPlatform.isLeapmotorC11() &&
+            shouldOpenOnLaunch(seen(context), phoneChosen) && applyGenerationDefaults(context, generation)
 
     private fun prefs(context: Context) = context.getSharedPreferences("diplay", Context.MODE_PRIVATE)
 
