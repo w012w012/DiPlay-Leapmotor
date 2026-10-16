@@ -4,7 +4,7 @@
 
 **本專案是專為零跑 C11 Android 車機適配的 DiPlay 分支。** 它不是面向比亞迪車機的上游版本。系統指紋包含 qti/msmnile_gvmq 時會啟用 C11 專屬程式；其他 C11 韌體版本和其他車型尚未確認相容。
 
-目前版本：0.2.20-C11.24（versionCode 45）。應用程式套件名稱：com.shihab.diplay；最低 Android 版本為 7.1（API 25），target SDK 為 37。
+目前版本：0.2.20-C11.24（versionCode 46）。應用程式套件名稱：com.shihab.diplay；最低 Android 版本為 7.1（API 25），target SDK 為 37。
 
 ## C11 適配功能
 

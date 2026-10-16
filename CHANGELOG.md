@@ -4,6 +4,7 @@
 - Keep optional C11 vehicle-log reading off by default; when enabled it uses already-authorized network ADB for gear, battery, speed, and steering events.
 - Remove BYD SOME/IP HUD, ambient-light/music analysis, and dedicated HUD-debug code from this C11 build; hide or guard incompatible BYD preferences without clearing saved settings.
 - Record fix24 automated verification and explicitly leave target-C11 vehicle acceptance pending. See [current release notes](docs/RELEASE-NOTES-0.2.20-C11.24.md) and [fix24 verification](docs/C11-FIX24-CLEANUP.md).
+- Set the fix24 Android `versionCode` to 46 so it can upgrade over fix23 (versionCode 45).
 
 The entries below document the earlier DiPlay base-project history. They are not a statement that those BYD/DiLink features are available in the current C11 build.
 

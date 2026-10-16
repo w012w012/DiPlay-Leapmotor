@@ -66,10 +66,12 @@ git diff --check
 - 发布包认证资产与私有构建输入及 fix23 字节一致；签名验证通过，与 fix23 为同一证书。fix23 APK 哈希未变化。
 - 公共源码扫描和差异空白检查通过。源码快照另存为工作区根目录 `build-snapshots/fix24-source.zip`，包含基准信息、当前改动文件、删除清单及二进制补丁，不包含认证资产或签名私钥。
 
-发布包：`dist/Diplay-0.2.20-C11-fix24.apk`（位于外层工作区）。包名 `com.shihab.diplay`，versionCode `45`，versionName `0.2.20-C11.24`，minSdk 25 / targetSdk 37。
+发布候选包：`dist/Diplay-0.2.20-C11-fix24.apk`（位于外层工作区）。包名 `com.shihab.diplay`，versionCode `46`，versionName `0.2.20-C11.24`，minSdk 25 / targetSdk 37；大小 18,270,509 字节，SHA-256 `219BAF4BB11C9DAF09C4DA2EFD83351D41EB9D65FEEEA411B0FA270EBB5DE277`。APK v2 签名通过，签名证书 SHA-256 为 `d1987cc9407fb9907a4f40ba77d9cf866d6d48eeca84213bcf7eecedc54df9d1`，与 fix23 相同。ZIP CRC、4 字节对齐和两个本地认证资源检查通过。
 
-- 大小：18,270,505 字节。
-- SHA-256：`DFAFA2619A84E52E13CC422DB383C1E11686C44921AD3611C885A5C0CAD178F8`。
+初始 fix24 APK 使用 versionCode 45，与 fix23 相同，不能保证可覆盖升级；该包已被本候选替代。versionCode 46 修正了升级顺序，不代表完成 C11 实车验收。
+
+- 大小：18,270,509 字节。
+- SHA-256：`219BAF4BB11C9DAF09C4DA2EFD83351D41EB9D65FEEEA411B0FA270EBB5DE277`。
 - 签名证书 SHA-256：`d1987cc9407fb9907a4f40ba77d9cf866d6d48eeca84213bcf7eecedc54df9d1`。
 
 尚未执行车机安装、模拟器/仪器测试或整机性能对比。仍需在 C11 验证连接、地图/渐隐、转向/音乐卡、方向盘键和听感；本轮精简不作为卡顿根因结论。

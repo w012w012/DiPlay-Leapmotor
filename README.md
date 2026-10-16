@@ -4,7 +4,7 @@
 
 **This repository adapts DiPlay specifically for the Leapmotor C11 Android head unit.** It is an independent C11-focused fork, not the BYD-oriented upstream release. C11 behavior is selected when the system fingerprint contains `qti/msmnile_gvmq`; other C11 firmware variants and other vehicle models have not been confirmed.
 
-Current source version: `0.2.20-C11.24` (versionCode `45`). Application ID: `com.shihab.diplay`; minimum Android version: 7.1 (API 25); target SDK: 37.
+Current source version: `0.2.20-C11.24` (versionCode `46`). Application ID: `com.shihab.diplay`; minimum Android version: 7.1 (API 25); target SDK: 37.
 
 ## What this C11 edition includes
 

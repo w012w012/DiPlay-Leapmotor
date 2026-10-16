@@ -19,9 +19,9 @@ No C11 vehicle installation or full end-to-end acceptance is claimed for this re
 ## Package details
 
 - Application ID: com.shihab.diplay
-- Version name / code: 0.2.20-C11.24 / 45
+- Version name / code: 0.2.20-C11.24 / 46
 - Minimum / target SDK: 25 / 37
 - APK recorded by the fix24 work: dist/Diplay-0.2.20-C11-fix24.apk
-- SHA-256: DFAFA2619A84E52E13CC422DB383C1E11686C44921AD3611C885A5C0CAD178F8
+- SHA-256: 219BAF4BB11C9DAF09C4DA2EFD83351D41EB9D65FEEEA411B0FA270EBB5DE277
 
 The C11 fork and upstream DiPlay have different signing certificates despite sharing the application ID. The in-app update checker currently queries upstream releases; disable it under Settings → About and obtain C11 updates from this repository's [Releases page](https://github.com/w012w012/DiPlay-Leapmotor/releases).

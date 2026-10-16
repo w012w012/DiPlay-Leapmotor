@@ -4,7 +4,7 @@
 
 **本仓库是专为零跑 C11 Android 车机适配的 DiPlay 分支。** 它不是面向比亚迪车机的上游版本。车机系统指纹包含 qti/msmnile_gvmq 时会启用 C11 专属逻辑；其他 C11 固件和其他车型尚未确认兼容。
 
-当前版本：0.2.20-C11.24（versionCode 45）。应用包名：com.shihab.diplay；最低 Android 版本：7.1（API 25）；target SDK：37。
+当前版本：0.2.20-C11.24（versionCode 46）。应用包名：com.shihab.diplay；最低 Android 版本：7.1（API 25）；target SDK：37。
 
 ## C11 适配内容
 
